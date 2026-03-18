@@ -1,0 +1,48 @@
+Windows build and run
+=====================
+
+Prerequisites
+-------------
+- Windows 10 or 11
+- .NET 8 SDK
+- Visual Studio 2022 recommended if you want to edit/debug WinForms
+- Microsoft Office / Excel interop support may be required by the SDK project
+
+Build from PowerShell
+---------------------
+Open PowerShell in the top-level bundle folder and run:
+
+  .\Scripts\build_app.ps1
+
+Run from PowerShell
+-------------------
+After a successful build:
+
+  .\Scripts\run_app.ps1
+
+Publish output
+--------------
+To publish a release build:
+
+  .\Scripts\publish_app.ps1
+
+The publish output will be under something like:
+
+  Source\Sensit.App.Programmer\bin\Release\net8.0-windows\win-x64\publish
+
+COM port setup
+--------------
+In the app, use:
+
+  File -> Configure Port...
+
+Then choose the COM port for the Pico.
+
+Scanner setup
+-------------
+Configure the scanner as:
+- USB HID keyboard wedge
+- with an Enter / CR suffix if possible
+
+The existing barcode textbox in the WinForms app should accept scanner input
+the same way it accepts typed input.

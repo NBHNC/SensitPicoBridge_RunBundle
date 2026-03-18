@@ -1,0 +1,48 @@
+Wiring for the O2 burn-in board as the smart-sensor programming interface
+========================================================================
+
+Recommended Pico wiring for the bridge firmware
+-----------------------------------------------
+GP4  -> SDA on the burn-in board
+GP5  -> SCL on the burn-in board
+3V3  -> VCC on the burn-in board / smart sensor
+GND  -> GND on the burn-in board
+
+Optional / current firmware behavior
+------------------------------------
+GP22 -> Optional switched-power control output from the bridge firmware
+
+If you are not using switched power, leave GP22 unconnected.
+The POWER ON / POWER OFF commands still return OK and do not prevent operation.
+
+Burn-in board notes based on your current setup
+-----------------------------------------------
+- Smart sensor VCC is 3.3 V
+- The burn-in board exposes SDA, SCL, VCC, and GND
+- Sense is generated from VCC when a board is inserted
+- LED is available on a separate hookup
+
+In this bundle, the bridge-based app only requires:
+- SDA
+- SCL
+- VCC
+- GND
+
+The Sense and LED lines are not required to run the bridge-based programmer.
+You can leave them unused for the first bring-up.
+
+Pull-ups
+--------
+Make sure there is one good set of I2C pull-ups to 3.3 V on SDA and SCL.
+4.7k is a reasonable default.
+
+Basic bench test
+----------------
+1. Wire SDA, SCL, VCC, and GND.
+2. Plug in a smart sensor.
+3. Plug in the Pico over USB.
+4. Configure the app to the Pico COM port.
+5. Read or write a sensor.
+
+If communication fails, first check that the EEPROM at 0x57 is actually
+reachable on the bus.

@@ -1,0 +1,6 @@
+1. Read Docs\README_FIRST.txt
+2. Flash the Pico with the files in Pico_Firmware
+3. Wire GP4/GP5/3V3/GND to the O2 burn-in board
+4. Run .\Scripts\build_app.ps1
+5. Run .\Scripts\run_app.ps1
+6. In the app, use File -> Configure Port... and select the Pico COM port

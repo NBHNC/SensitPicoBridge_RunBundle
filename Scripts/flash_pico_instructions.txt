@@ -1,0 +1,16 @@
+Copy these two files to the Pico filesystem:
+
+  Pico_Firmware\main.py
+  Pico_Firmware\pico_i2c_bridge.py
+
+The easiest method is Thonny:
+  1. Plug in the Pico.
+  2. Open Thonny and select MicroPython (Raspberry Pi Pico).
+  3. Open main.py and save it to the Pico.
+  4. Open pico_i2c_bridge.py and save it to the Pico.
+  5. Reboot the Pico.
+
+When the Pico boots, it should present a USB serial port and respond to:
+  PING
+with:
+  OK

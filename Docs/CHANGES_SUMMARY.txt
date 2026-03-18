@@ -1,0 +1,14 @@
+Changes summary
+===============
+
+Compared with the original project:
+- Replaced Sensit.App.Programmer\FormProgrammer.cs with the Pico bridge version
+- Added Sensit.TestSDK\Devices\PicoI2C.cs
+- Added Pico_Firmware\pico_i2c_bridge.py
+- Added Pico_Firmware\main.py
+- Removed aardvark.dll packaging from Sensit.App.Programmer.csproj
+
+Strategy
+--------
+Keep the C# UI, SensorDataLibrary, and CRC logic intact.
+Replace the hardware layer with a Pico serial bridge.

@@ -1,0 +1,14 @@
+Scanner notes
+=============
+
+The bridge-based programmer keeps the existing WinForms UI.
+The easiest scanner setup is:
+
+- USB HID keyboard wedge mode
+- automatic Enter / CR suffix
+
+That lets the scanner behave like a keyboard and fill the existing barcode box.
+
+If the scanner is set to USB serial / COM-port mode instead, this app does not
+currently include a separate scanner-COM reader layer. In that case, reconfigure
+the scanner to keyboard-wedge mode.

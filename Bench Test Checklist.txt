@@ -1,0 +1,86 @@
+1. Set up the hardware
+- Plug the Pico into the PC by USB
+- Wire:
+  GP4 -> SDA
+  GP5 -> SCL
+  3V3 -> VCC
+  GND -> GND
+- Leave Sense and LED disconnected for the very first test
+
+2. Load the Pico firmware
+- Open Thonny
+- Save pico_i2c_bridge.py to the Pico
+- Save main.py to the Pico
+- Reboot the Pico
+
+3. Confirm the Pico is alive
+- Open a serial terminal to the Pico COM port
+- Send:
+  PING
+- Expected result:
+  OK
+
+4. Connect the smart sensor fixture
+- Plug a known-good smart sensor into the O2 burn-in board
+- Confirm the burn-in board is actually passing 3.3V, GND, SDA, and SCL through to the sensor
+
+5. Build the Windows app
+- Open PowerShell in the bundle folder
+- Run:
+  Set-ExecutionPolicy -Scope Process Bypass
+  .\Scripts\build_app.ps1
+- Wait for the build to finish without errors
+
+6. Launch the app
+- Run:
+  .\Scripts\run_app.ps1
+
+7. Select the Pico COM port
+- In the WinForms app, go to File -> Configure Port.
+- Pick the Pico COM port
+
+8. Do a communication test first
+- Try the simplest operation available that talks to the sensor/EEPROM
+- Goal: confirm the app can communicate before writing anything
+
+9. Program one known-good sensor
+- Use one barcode from a sensor you do not mind testing with first
+- Scan it with the USB scanner or type it manually into the barcode box
+- Run the programming action
+
+10. Verify result
+- Confirm the write completes without errors
+- If the app has a readback/read function, use it immediately
+- Check that sensor type and serial match what you expected
+
+WHAT SUCCESS LOOKS LIKE
+- Pico responds to PING
+- App opens and connects to the correct COM port
+- No I2C communication error
+- Sensor programs successfully
+- Readback matches the barcode/sensor type
+
+IF IT FAILS, CHECK THESE IN ORDER
+1. Wrong COM port
+2. SDA/SCL swapped
+3. Missing common ground
+4. No I2C pull-ups on the bus
+5. Burn-in board not actually passing through the lines
+6. Sensor not seated correctly
+7. EEPROM at 0x57 not responding
+
+FOR THE VERY FIRST TEST, DO NOT ADD COMPLEXITY
+Do not start with:
+- scanner automation
+- Sense input
+- LED indication
+- multiple sensors
+- production operator flow
+
+Get one sensor programmed successfully by hand first.
+
+After that, add:
+1. scanner input
+2. Sense detect
+3. LED status
+4. operator workflow cleanup

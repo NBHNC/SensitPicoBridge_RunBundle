@@ -1,0 +1,669 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Sensit.TestSDK.Calculations;
+using Sensit.TestSDK.Exceptions;
+
+namespace Sensit.App.Programmer
+{
+	public class SensorDataLibrary
+	{
+		#region Constants
+
+		//EEPROM's page size 
+		public static readonly ushort PAGE_SIZE = 64;
+
+		//Byte address locations for each record type
+		public static readonly ushort ADDRESS_BASE_RECORD = (ushort)(0 * PAGE_SIZE);
+		public static readonly ushort ADDRESS_DEVICE_ID = (ushort)(4 * PAGE_SIZE);
+		public static readonly ushort ADDRESS_MANUFACTURING_ID = (ushort)(5 * PAGE_SIZE);
+
+		//Oxygen Sensor
+		public static readonly int ZERO_MAX_OXYGEN = 26000;
+		public static readonly int ZERO_MIN_OXYGEN = 22000;
+		public static readonly int CAL_SCALE_OXYGEN = 0;
+		public static readonly ushort CAL_ZERO_OXYGEN = 19699;
+
+		//Carbon Monoxide Sensor
+		public static readonly int CARBONMONOXIDE_CAL_SCALE = 0x0012AD4; // 11/17/22 fixed value
+		public static readonly int CARBONMONOXIDE_CAL_POINT_ONE = 0x64000000; //only CO has different Cal Point (flipped number peter gave)
+
+		//Hydrogen Sulfide Sensor
+		public static readonly int HYDROGENSULFIDE_CAL_SCALE = 0x1FD920;
+
+		//Hydrogen Cyanide Sensor
+		public static readonly int HYDROGENCYANIDE_CAL_SCALE = 0xde2b0;
+
+		#endregion
+
+		#region Enumerations
+
+		/// <summary>
+		/// Enum for smart sensor type code.
+		/// </summary>
+		public enum SensorType
+		{
+			Oxygen = 0x01,
+			OxygenPb = 0x02,
+			CarbonMonoxide = 0x03,
+			HydrogenSulfide = 0x04,
+			HydrogenCyanide = 0x05,
+			SulfurDioxide = 0x06,
+			Chlorine = 0x07,
+			NitrogenDioxide = 0x08,
+			Phosphine = 0x09,
+			EthyleneOxide = 0x0A,
+			CarbonDioxide = 0x0B,
+			Methane = 0x0C,
+			Propane = 0x0D,
+			Methane2611 = 0x0E,
+			MethaneIR = 0x0F,
+			DualCOH2S = 0x10
+		}
+
+		/// <summary>
+		/// Enum for Validity (Base Record, Device ID, and Manufacturing Record)
+		/// </summary>
+		public enum Validity
+		{
+			Valid = 0xAA,
+			Erased = 0xFF,
+			//anything else is Invalid
+		}
+
+		#endregion
+
+		#region BaseRecordClasses
+
+		/// <summary>
+		/// Abstract class for shared values between sensor record formats.
+		/// </summary>
+		public abstract class BaseRecord
+		{
+			public Validity BaseRecordValidity { get; set; } = Validity.Valid; 
+			public SensorType SensorType { get; set; }
+			public byte SensorRev { get; set; } = 1;
+			public abstract byte RecordFormat { get; set; }
+			public int CalScale { get; set; } 
+			public byte CalGasOne { get; set; } = 0;
+			public int CalPointOne { get; set; } 
+			public int CalMaxOne { get; set; } = 0; 
+			public int CalMinOne { get; set; } = 0; 
+			public byte CalGasTwo { get; set; } = 0;  
+			public ushort Year { get; set; } = 0x0014;
+			public byte Month { get; set; } = 0x03;
+			public byte Day { get; set; } = 0x02;
+			public int AutoZero { get; set; } = 0; 
+			public int ZeroMax { get; set; } = 0;
+			public int ZeroMin { get; set; } = 0;
+
+			/// <summary>
+			/// Get info from Sensor Data Library to put onto EEPROM.
+			/// </summary>
+			/// <returns>List of bytes to program onto EEPROM.</returns>
+			public abstract List<byte> GetBytes();
+
+			/// <summary>
+			/// Get info from EEPROM to set variables in Sensor Data Library.
+			/// </summary>
+			/// <param name="data">List of bytes from EEPROM</param>
+			public abstract void SetBytes(List<byte> data);
+		}
+
+		/// <summary>
+		/// Record Library for sensors with format 0.
+		/// (HCN, CO, H2S)
+		/// </summary>
+		public class BaseRecordFormat0 : BaseRecord
+		{
+			public int CalPointTwo { get; set; } = 0; 
+			public int CalMaxTwo { get; set; } = 0;
+			public int CalMinTwo { get; set; } = 0;
+			public byte CalGasThree { get; set; } = 0;
+			public override byte RecordFormat { get; set; } = 0;
+
+			public override List<byte> GetBytes()
+			{
+				List<byte> data =
+				[
+					(byte)BaseRecordValidity,
+					(byte)SensorType,
+					SensorRev,
+					RecordFormat,
+					.. ToBigEndianArray(CalScale),
+					CalGasOne,
+					.. ToBigEndianArray(CalPointOne),
+					.. ToBigEndianArray(CalMaxOne),
+					.. ToBigEndianArray(CalMinOne),
+					CalGasTwo,
+					.. ToBigEndianArray(CalPointTwo),
+					.. ToBigEndianArray(CalMaxTwo),
+					.. ToBigEndianArray(CalMinTwo),
+					CalGasThree,
+					.. new List<byte> { 0, 0, 0, 0, 0, 0, 0 },
+					Day,
+					Month,
+					.. ToBigEndianArray(Year),
+					0,
+					.. ToBigEndianArray(AutoZero),
+					.. ToBigEndianArray(ZeroMax),
+					.. ToBigEndianArray(ZeroMin),
+					0,
+				];
+
+				// Generate a checksum (then convert to byte array).
+				byte[] crc = BitConverter.GetBytes(CalcCRC(data));
+
+				// Ensure CRC is big endian.
+				if (BitConverter.IsLittleEndian)
+				{
+					Array.Reverse(crc);
+				}
+
+				// Add checksum to message.
+				data.AddRange(crc);
+
+				return data;
+			}
+
+			public override void SetBytes(List<byte> data)
+			{
+				BaseRecordValidity = (Validity)data[0];
+				SensorType = (SensorType)data[1];
+				SensorRev = data[2];
+				RecordFormat = data[3];
+				CalScale = FromBigEndianArray([.. data], 4);
+				CalGasOne = data[8];
+				CalPointOne = FromBigEndianArray([.. data], 9);
+				CalMaxOne = FromBigEndianArray([.. data], 13);
+				CalMinOne = FromBigEndianArray([.. data], 17);
+				CalGasTwo = data[21];
+				CalPointTwo = FromBigEndianArray([.. data], 22);
+				CalMaxTwo = FromBigEndianArray([.. data], 26);
+				CalMinTwo = FromBigEndianArray([.. data], 30);
+				CalGasThree = data[34];
+				Day = data[42];
+				Month = data[43];
+				Year = FromBigEndianArrayUshort([.. data], 44);
+				AutoZero = FromBigEndianArray([.. data], 47);
+				ZeroMax = FromBigEndianArray([.. data], 51);
+				ZeroMin = FromBigEndianArray([.. data], 55);
+
+				//Check crc.
+				if (CheckCrc(data) == false)
+				{
+					throw new DeviceCommandFailedException("Bad CRC from sensor BR0.");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Record Library for sensors with format 2 (O2)
+		/// </summary>
+		public class BaseRecordFormat2 : BaseRecord
+		{
+			public int MinSpan { get; set; } = 1000;
+			public ushort ZeroCalibration { get; set; }
+			public override byte RecordFormat { get; set; } = 2;
+
+			public override List<byte> GetBytes()
+			{
+				List<byte> data = [(byte)BaseRecordValidity, (byte)SensorType, SensorRev, RecordFormat];
+
+				//Flip CalScale value so it is written in the correct order.
+				List<byte> flippedCalScale = [.. ToBigEndianArray(CalScale)];
+				flippedCalScale.Reverse();
+				data.AddRange(flippedCalScale);
+
+				data.Add(CalGasOne);
+				data.AddRange(ToBigEndianArray(CalPointOne));
+				data.AddRange(ToBigEndianArray(CalMaxOne));
+				data.AddRange(ToBigEndianArray(CalMinOne));
+				data.Add(CalGasTwo);
+				data.AddRange(ToBigEndianArray(MinSpan));
+
+				//9 unused bytes
+				data.AddRange([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+				data.AddRange(ToBigEndianArray(ZeroCalibration));
+				data.Add(Day);
+				data.Add(Month);
+				data.AddRange(ToBigEndianArray(Year));
+				data.Add(0);
+				data.AddRange(ToBigEndianArray(AutoZero));
+				data.AddRange(ToBigEndianArray(ZeroMax));
+				data.AddRange(ToBigEndianArray(ZeroMin));
+				data.Add(0);
+
+				// Generate a checksum (then convert to byte array).
+				byte[] crc = BitConverter.GetBytes(CalcCRC(data));
+
+				// Ensure CRC is big endian.
+				if (BitConverter.IsLittleEndian)
+				{
+					Array.Reverse(crc);
+				}
+
+				// Add checksum to message.
+				data.AddRange(crc);
+				return data;
+			}
+
+			public override void SetBytes(List<byte> data)
+			{
+				BaseRecordValidity = (Validity)data[0];
+				SensorType = (SensorType)data[1];
+				SensorRev = data[2];
+				RecordFormat = data[3];
+				CalScale = FromBigEndianArray([.. data], 4);
+				CalGasOne = data[8];
+				CalPointOne = FromBigEndianArray([.. data], 9);
+				CalMaxOne = FromBigEndianArray([.. data], 13);
+				CalMinOne = FromBigEndianArray([.. data], 17);
+				CalGasTwo = data[21];
+				MinSpan = FromBigEndianArray([.. data], 22);
+				ZeroCalibration = FromBigEndianArrayUshort([.. data], 35);
+				Day = data[42];
+				Month = data[43];
+				Year = FromBigEndianArrayUshort([.. data], 44);
+				AutoZero = FromBigEndianArray([.. data], 47);
+				ZeroMax = FromBigEndianArray([.. data], 51);
+				ZeroMin = FromBigEndianArray([.. data], 55);
+
+				// Check CRC.
+				if (CheckCrc(data) == false)
+				{
+					throw new DeviceCommandFailedException("Bad CRC from sensor BR2.");
+				}
+
+			}
+		}
+
+		#endregion
+
+		#region DeviceID
+
+		/// <summary>
+		/// Class for Device ID (page 4 of EEPROM)
+		/// </summary>
+		public class DeviceID
+		{
+			public Validity DeviceIDValidity { get; set; } = Validity.Valid;
+			public SensorType SensorType { get; set; }
+			public byte RecordFormat { get; set; }
+			public ushort Day { get; set; }
+			public ushort Month { get; set; }
+			public int Year { get; set; }
+			public string SerialNumber { get; set; } //ASCII data
+			public ushort MaxExposure { get; set; } = 0; //bytes 0x30 - 0x31
+			public ushort MaxRange { get; set; } = 0; //bytes 0x32 - 0x33
+			public ushort MinRange { get; set; } = 0; //bytes 0x34 - 0x35
+			public ushort Issue { get; set; } = 0; //bytes 0x36 - 0x37
+			public ushort Revision { get; set; } = 0; //bytes 0x38 - 0x39
+			public ushort PointRelease { get; set; } = 0; //bytes 0x3A - 0x3B
+			public int Checksum { get; set; } //bytes 0x3C - 0x3F
+
+			/// <summary>
+			/// Get info from Sensor Data Library to put onto EEPROM.
+			/// </summary>
+			/// <returns>List of bytes to program onto EEPROM.</returns>
+			public List<byte> GetBytes()
+			{
+				List<byte> data =
+				[
+					(byte)DeviceIDValidity,
+					(byte)SensorType,
+					0,
+					RecordFormat,
+					.. new List<byte> { 0, 0, 0 },
+					.. BreakIntoDigitsUshort(Day),
+					.. BreakIntoDigitsUshort(Month),
+					.. BreakIntoDigits(Year),
+					0,
+					.. ToBigEndianArray(SerialNumber),
+					.. ToBigEndianArray(MaxExposure),
+					.. ToBigEndianArray(MaxRange),
+					.. ToBigEndianArray(MinRange),
+					.. ToBigEndianArray(Issue),
+					.. ToBigEndianArray(Revision),
+					.. ToBigEndianArray(PointRelease),
+				];
+
+				// Generate a checksum (then convert to byte array).
+				byte[] crc = BitConverter.GetBytes(CalcCRC(data));
+
+				// Ensure CRC is big endian.
+				if (BitConverter.IsLittleEndian)
+				{
+					Array.Reverse(crc);
+				}
+
+				// Add checksum to message.
+				data.AddRange(crc);
+
+				return data;
+			}
+
+			/// <summary>
+			/// Get info from EEPROM to set variables in Sensor Data Library.
+			/// </summary>
+			/// <param name="data">List of bytes from EEPROM</param>
+			public void SetBytes(List<byte> data)
+			{
+				DeviceIDValidity = (Validity)data[0];
+				SensorType = (SensorType)data[1];
+				RecordFormat = data[3];
+				Day = DigitsIntoUshort([.. data], 7);
+				Month = DigitsIntoUshort([.. data], 9);
+				Year = DigitsIntoInt([.. data], 11);
+				SerialNumber = Encoding.UTF8.GetString([.. data], 16, 32);
+				MaxExposure = FromBigEndianArrayUshort([.. data], 48);
+				MaxRange = FromBigEndianArrayUshort([.. data], 50);
+				MinRange = FromBigEndianArrayUshort([.. data], 52);
+				Issue = FromBigEndianArrayUshort([.. data], 54);
+				Revision = FromBigEndianArrayUshort([.. data], 56);
+				PointRelease = FromBigEndianArrayUshort([.. data], 58);
+
+				// Check CRC.
+				if (CheckCrc(data) == false)
+				{
+					throw new DeviceCommandFailedException("Bad CRC from sensor D_ID.");
+				}
+			}
+		}
+		#endregion
+
+		#region Manufacturing Record
+
+		/// <summary>
+		/// Class for Manufacturing ID Records (page 5)
+		/// </summary>
+		public class ManufactureID
+		{
+			public Validity Validity { get; set; } = Validity.Valid;
+			public SensorType SensorType { get; set; } //Variable
+			public byte RecordFormat { get; set; }
+			public ushort Day { get; set; }
+			public ushort Month { get; set; }
+			public int Year { get; set; }
+			public string SerialNumber { get; set; } //ASCII data
+			public ushort Issue { get; set; } = 0;
+			public ushort Revision { get; set; } = 0;
+			public ushort PointRelease { get; set; } = 0;
+			public int CheckSum { get; set; } //Calculation
+
+			/// <summary>
+			/// Get info from Sensor Data Library to put onto EEPROM.
+			/// </summary>
+			/// <returns>List of bytes to program onto EEPROM.</returns>
+			public List<byte> GetBytes()
+			{
+				List<byte> data =
+				[
+					(byte)Validity,
+					(byte)SensorType,
+					0,
+					RecordFormat,
+					.. new List<byte> { 0, 0, 0 },
+					.. BreakIntoDigitsUshort(Day),
+					.. BreakIntoDigitsUshort(Month),
+					.. BreakIntoDigits(Year),
+					0,
+					.. ToBigEndianArray(SerialNumber),
+					.. new List<byte> { 0, 0, 0, 0, 0, 0 },
+					.. ToBigEndianArray(Issue),
+					.. ToBigEndianArray(Revision),
+					.. ToBigEndianArray((PointRelease)),
+				];
+
+				// Generate a checksum (then convert to byte array).
+				byte[] crc = BitConverter.GetBytes(CalcCRC(data));
+
+				// Ensure CRC is big endian.
+				if (BitConverter.IsLittleEndian)
+				{
+					Array.Reverse(crc);
+				}
+				// Add checksum to message.
+				data.AddRange(crc);
+				return data;
+			}
+
+			/// <summary>
+			/// Get info from EEPROM to set variables in Sensor Data Library.
+			/// </summary>
+			/// <param name="data">List of bytes from EEPROM</param>
+			public void SetBytes(List<byte> data)
+			{
+				Validity = (Validity)data[0];
+				SensorType = (SensorType)data[1];
+				RecordFormat = data[3];
+				Day = DigitsIntoUshort([.. data], 7);
+				Month = DigitsIntoUshort([.. data], 9);
+				Year = DigitsIntoInt([.. data], 11);
+				SerialNumber = Encoding.UTF8.GetString([.. data], 16, 32);
+				Issue = FromBigEndianArrayUshort([.. data], 50);
+				Revision = FromBigEndianArrayUshort([.. data], 52);
+				PointRelease = FromBigEndianArrayUshort([.. data], 54);
+
+				// Check CRC.
+				if (CheckCrc(data) == false)
+				{
+					throw new DeviceCommandFailedException("Bad CRC from sensor MR.");
+				}
+			}
+		}
+		#endregion
+
+		#region Methods
+
+		/// <summary>
+		/// Calculate the checksum.
+		/// </summary>
+		/// <remarks>
+		/// Add extra bytes to get to a 32-bit boundary.
+		/// Calculate the CRC.
+		/// (Do not send the extra bytes.)
+		/// </remarks>
+		/// <returns>checksum</returns>
+		private static uint CalcCRC(List<byte> message)
+		{
+			// Create a temporary copy of the message to manipulate.
+			List<byte> msgCopy = [.. message];
+
+			// Measure the length of the message (without the checksum).
+			ushort length = (ushort)(message.Count);
+
+			// Increment to next full 32-byte boundary.
+			while (length % 4 != 0)
+			{
+				// Add a byte (to length and message).
+				length++;
+				msgCopy.Add(0x00);
+			}
+
+			// Convert byte array to UInt32 array.
+			byte[] byteArray = [.. msgCopy];
+			uint[] uintArray = new uint[byteArray.Length / 4];
+			Buffer.BlockCopy(byteArray, 0, uintArray, 0, byteArray.Length);
+
+			// Generate a checksum.
+			return Checksum.Crc32Custom(uintArray);
+		}
+
+		/// <summary>
+		/// Check for valid CRC
+		/// </summary>
+		/// <param name="message"></param>
+		/// <returns></returns>
+		public static bool CheckCrc(List<byte> message)
+		{
+			// Check for valid message.
+			if (message == null)
+			{
+				throw new ArgumentNullException(nameof(message));
+			}
+			else if (message.Count == 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(message));
+			}
+
+			// Parse the CRC from the message.
+			byte[] crc = [.. message.Skip(message.Count - 4).Take(4)];
+
+			// Ensure CRC is big endian.
+			if (BitConverter.IsLittleEndian)
+			{
+				Array.Reverse(crc);
+			}
+
+			uint crcReceived = BitConverter.ToUInt32(crc, 0);
+
+			// Calculate the expected CRC.
+			List<byte> msg = [.. message.Take(message.Count - 4)];
+			uint crcCalc = CalcCRC(msg);
+
+			// If the CRCs match, return true.
+			return (crcReceived == crcCalc);
+		}
+
+		/// <summary>
+		/// Switch info gotten from G3 to LittleEndianArray
+		/// </summary>
+		/// <param name="data">byte list of data</param>
+		/// <param name="startIndex">int address of data</param>
+		/// <returns>int of converted values from data</returns>
+		private static int FromBigEndianArray(byte[] data, int startIndex)
+		{
+			return BitConverter.ToInt32(data, startIndex);
+		}
+
+		/// <summary>
+		/// Switch info gotten from G3 to LittleEndianArray
+		/// </summary>
+		/// <param name="data">byte list of data</param>
+		/// <param name="startIndex">int address of data</param>
+		/// <returns>ushort of converted values from data</returns>
+		private static ushort FromBigEndianArrayUshort(byte[] data, int startIndex)
+		{
+			return BitConverter.ToUInt16(data, startIndex);
+		}
+
+		/// <summary>
+		/// Switch info gotten from Sensor Data Library to BigEndianArray for G3.
+		/// </summary>
+		/// <param name="value">value to switch into a big endian array</param>
+		/// <returns>Big endian list of bytes holding value</returns>
+		private static List<byte> ToBigEndianArray(int value)
+		{
+			List<byte> bytes = [.. BitConverter.GetBytes(value)];
+
+			if (BitConverter.IsLittleEndian)
+			{
+				bytes.Reverse();
+			}
+
+			return [.. bytes];
+		}
+
+		/// <summary>
+		/// Switch info gotten from Sensor Data Library to BigEndianArray for G3.
+		/// </summary>
+		/// <param name="value">value to switch into a big endian array</param>
+		/// <returns>Big endian list of bytes holding value</returns>
+		private static List<byte> ToBigEndianArray(ushort value)
+		{
+			List<byte> bytes = [.. BitConverter.GetBytes(value)];
+
+			if (BitConverter.IsLittleEndian)
+			{
+				bytes.Reverse();
+			}
+
+			return bytes;
+		}
+
+		/// <summary>
+		/// Switch info gotten from Sensor Data Library to BigEndianArray for G3.
+		/// </summary>
+		/// <param name="value">value to switch into a big endian array</param>
+		/// <returns>Big endian list of bytes holding value</returns>
+		private static List<byte> ToBigEndianArray(string value)
+		{
+			List<byte> bytes = [.. Encoding.ASCII.GetBytes(value)];
+
+			//Serial Number is the only string in the library. Add bytes until it is the correct size.
+			while (bytes.Count != 32)
+			{
+				bytes.Add(0);
+			}
+
+			return bytes;
+		}
+
+		/// <summary>
+		/// Breaks Integer into a byte list of its digits
+		/// </summary>
+		/// <param name="value">integer to parse</param>
+		/// <returns>byte array of digits</returns>
+		private static List<byte> BreakIntoDigits(int value)
+		{
+			List<byte> digits = [.. value.ToString().Select(t => byte.Parse(t.ToString()))];
+			while (digits.Count < 4)
+			{
+				digits.Insert(0, 0);
+			}
+			return digits;
+		}
+
+		/// <summary>
+		/// Breaks Ushort into a byte list of its digits
+		/// </summary>
+		/// <param name="value">ushort to parse</param>
+		/// <returns>byte array of digits</returns>
+		private static List<byte> BreakIntoDigitsUshort(ushort value)
+		{
+			List<byte> digits = [.. value.ToString().Select(t => byte.Parse(t.ToString()))];
+			while (digits.Count < 2)
+			{
+				digits.Insert(0, 0);
+			}
+			return digits;
+		}
+
+		/// <summary>
+		/// Takes an array of 2 digits and converts them into a ushort.
+		/// </summary>
+		/// <param name="digits">byte array to take digits from</param>
+		/// <param name="startIndex">starting index in digits to parse</param>
+		/// <returns>ushort from specified bytes</returns>
+		private static ushort DigitsIntoUshort(byte[] digits, int startIndex)
+		{
+			string s = $"{digits[startIndex]}{digits[startIndex + 1]}";
+
+			ushort output = UInt16.Parse(s);
+
+			return output;
+		}
+
+		/// <summary>
+		/// Takes an array of 4 digits and converts them into an integer.
+		/// </summary>
+		/// <param name="digits">byte array to take digits from</param>
+		/// <param name="startIndex">starting index in digits to parse</param>
+		/// <returns>integer from specified bytes</returns>
+		private static int DigitsIntoInt(byte[] digits, int startIndex)
+		{
+			string s = $"{digits[startIndex]}{digits[startIndex + 1]}{digits[startIndex + 2]}{digits[startIndex + 3]}";
+
+			int output = Int32.Parse(s);
+
+			return output;
+		}
+
+		#endregion
+	}
+}
+
+
