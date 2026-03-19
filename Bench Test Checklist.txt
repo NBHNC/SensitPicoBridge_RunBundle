@@ -1,10 +1,13 @@
 1. Set up the hardware
 - Plug the Pico into the PC by USB
-- Wire:
-  GP4 -> SDA
-  GP5 -> SCL
-  3V3 -> VCC
-  GND -> GND
+
+Recommended Pico wiring for the bridge firmware
+-----------------------------------------------
+GP4 (pin 6)  -> SDA on the burn-in board
+GP5 (pin 7)  -> SCL on the burn-in board
+3V3 (pin 36) -> VCC on the burn-in board / smart sensor
+GND (pin 38)  -> GND on the burn-in board
+
 - Leave Sense and LED disconnected for the very first test
 
 2. Load the Pico firmware

@@ -3,14 +3,14 @@ Wiring for the O2 burn-in board as the smart-sensor programming interface
 
 Recommended Pico wiring for the bridge firmware
 -----------------------------------------------
-GP4  -> SDA on the burn-in board
-GP5  -> SCL on the burn-in board
-3V3  -> VCC on the burn-in board / smart sensor
-GND  -> GND on the burn-in board
+GP4 (pin 6)  -> SDA on the burn-in board
+GP5 (pin 7)  -> SCL on the burn-in board
+3V3 (pin 36) -> VCC on the burn-in board / smart sensor
+GND (pin 38)  -> GND on the burn-in board
 
 Optional / current firmware behavior
 ------------------------------------
-GP22 -> Optional switched-power control output from the bridge firmware
+GP22 (pin 29) -> Optional switched-power control output from the bridge firmware
 
 If you are not using switched power, leave GP22 unconnected.
 The POWER ON / POWER OFF commands still return OK and do not prevent operation.
@@ -19,7 +19,7 @@ Burn-in board notes based on your current setup
 -----------------------------------------------
 - Smart sensor VCC is 3.3 V
 - The burn-in board exposes SDA, SCL, VCC, and GND
-- Sense is generated from VCC when a board is inserted
+- Sense is generated from SCL when a board is inserted
 - LED is available on a separate hookup
 
 In this bundle, the bridge-based app only requires:
