@@ -125,12 +125,14 @@ namespace Sensit.App.Programmer
 			wikiToolStripMenuItem.Name = "wikiToolStripMenuItem";
 			wikiToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
 			wikiToolStripMenuItem.Text = "&Wiki";
+			wikiToolStripMenuItem.Click += WikiToolStripMenuItem_Click;
 			// 
 			// aboutToolStripMenuItem
 			// 
 			aboutToolStripMenuItem.Name = "aboutToolStripMenuItem";
 			aboutToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
 			aboutToolStripMenuItem.Text = "&About";
+			aboutToolStripMenuItem.Click += AboutToolStripMenuItem_Click;
 			// 
 			// statusStrip
 			// 

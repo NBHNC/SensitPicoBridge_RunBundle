@@ -647,13 +647,13 @@
       <dsig:DigestValue>FEbWsm2kmlqfNmly+J9OI2+RaVXzHdw467liF8HKzpw=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="Sensit.App.Programmer.dll" size="45056">
+  <file name="Sensit.App.Programmer.dll" size="45568">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>wlOHnIA1zGKH2Acx/9DGQdsiXQs3J1xeVMHkJ0Bfbyk=</dsig:DigestValue>
+      <dsig:DigestValue>Pj7A6HubJ38SOqb1SwV1MIp6koZmk/buOX99bYBxSUg=</dsig:DigestValue>
     </hash>
   </file>
   <file name="Sensit.App.Programmer.dll.config" size="931">
@@ -680,7 +680,7 @@
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>JUrrS0pYRxhvdxLpajnUI9KoSEOv9vffo522B9kz8gM=</dsig:DigestValue>
+      <dsig:DigestValue>wVlGS+la240Ou3B0q1WdIiiZfJw02IqEIKXb5fuKlnw=</dsig:DigestValue>
     </hash>
   </file>
   <file name="System.ComponentModel.Composition.dll" size="294160">
