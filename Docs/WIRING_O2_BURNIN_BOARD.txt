@@ -3,8 +3,8 @@ Wiring for the O2 burn-in board as the smart-sensor programming interface
 
 Recommended Pico wiring for the bridge firmware
 -----------------------------------------------
-GP4 (pin 6)  -> SDA on the burn-in board
-GP5 (pin 7)  -> SCL on the burn-in board
+GP4 (pin 6)  -> SDA/SSB on the burn-in board
+GP5 (pin 7)  -> SENSE/SSC/SCL on the burn-in board
 3V3 (pin 36) -> VCC on the burn-in board / smart sensor
 GND (pin 38)  -> GND on the burn-in board
 
