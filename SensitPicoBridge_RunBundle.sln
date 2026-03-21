@@ -1,3 +1,4 @@
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
@@ -8,20 +9,54 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sensit.App.Programmer", "So
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sensit.TestSDK", "Source\Sensit.TestSDK\Sensit.TestSDK.csproj", "{D313A164-0C81-43CB-D459-6E1313BF3435}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sensit.App.O2Characterizer", "Source\Sensit.App.O2Characterizer\Sensit.App.O2Characterizer.csproj", "{1FDB3011-0336-4FBC-BF40-88C356FE4A39}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|x64.Build.0 = Debug|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Debug|x86.Build.0 = Debug|Any CPU
 		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|x64.ActiveCfg = Release|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|x64.Build.0 = Release|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|x86.ActiveCfg = Release|Any CPU
+		{F90BDB3C-3933-1741-A20D-7B87778D45B9}.Release|x86.Build.0 = Release|Any CPU
 		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|x64.Build.0 = Debug|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Debug|x86.Build.0 = Debug|Any CPU
 		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|x64.ActiveCfg = Release|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|x64.Build.0 = Release|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|x86.ActiveCfg = Release|Any CPU
+		{D313A164-0C81-43CB-D459-6E1313BF3435}.Release|x86.Build.0 = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|x64.Build.0 = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Debug|x86.Build.0 = Debug|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|x64.ActiveCfg = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|x64.Build.0 = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|x86.ActiveCfg = Release|Any CPU
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -29,6 +64,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{F90BDB3C-3933-1741-A20D-7B87778D45B9} = {B8EFCA5F-814F-285C-A8CB-F00F14650265}
 		{D313A164-0C81-43CB-D459-6E1313BF3435} = {B8EFCA5F-814F-285C-A8CB-F00F14650265}
+		{1FDB3011-0336-4FBC-BF40-88C356FE4A39} = {B8EFCA5F-814F-285C-A8CB-F00F14650265}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {073655D4-A16F-4900-BF92-97A00C15F42C}
