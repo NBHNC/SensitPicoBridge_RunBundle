@@ -30,6 +30,8 @@ partial class Form1
         numericUpDownWarmupMinutes = new NumericUpDown();
         labelWarmupMinutes = new Label();
         buttonRunCharacterization = new Button();
+        buttonExportRunsCsv = new Button();
+        buttonExportSamplesCsv = new Button();
         buttonAddSensor = new Button();
         textBoxNotes = new TextBox();
         labelNotes = new Label();
@@ -92,6 +94,8 @@ partial class Form1
         groupBoxInput.Controls.Add(labelSampleCount);
         groupBoxInput.Controls.Add(numericUpDownWarmupMinutes);
         groupBoxInput.Controls.Add(labelWarmupMinutes);
+        groupBoxInput.Controls.Add(buttonExportSamplesCsv);
+        groupBoxInput.Controls.Add(buttonExportRunsCsv);
         groupBoxInput.Controls.Add(buttonRunCharacterization);
         groupBoxInput.Controls.Add(buttonAddSensor);
         groupBoxInput.Controls.Add(textBoxNotes);
@@ -108,7 +112,7 @@ partial class Form1
         // labelComPortHint
         // 
         labelComPortHint.AutoSize = true;
-        labelComPortHint.Location = new Point(1121, 84);
+        labelComPortHint.Location = new Point(833, 104);
         labelComPortHint.Name = "labelComPortHint";
         labelComPortHint.Size = new Size(84, 15);
         labelComPortHint.TabIndex = 16;
@@ -221,6 +225,26 @@ partial class Form1
         buttonRunCharacterization.Text = "Run Characterization";
         buttonRunCharacterization.UseVisualStyleBackColor = true;
         buttonRunCharacterization.Click += buttonRunCharacterization_Click;
+        // 
+        // buttonExportRunsCsv
+        // 
+        buttonExportRunsCsv.Location = new Point(1121, 80);
+        buttonExportRunsCsv.Name = "buttonExportRunsCsv";
+        buttonExportRunsCsv.Size = new Size(110, 28);
+        buttonExportRunsCsv.TabIndex = 17;
+        buttonExportRunsCsv.Text = "Export Runs CSV";
+        buttonExportRunsCsv.UseVisualStyleBackColor = true;
+        buttonExportRunsCsv.Click += buttonExportRunsCsv_Click;
+        // 
+        // buttonExportSamplesCsv
+        // 
+        buttonExportSamplesCsv.Location = new Point(1237, 80);
+        buttonExportSamplesCsv.Name = "buttonExportSamplesCsv";
+        buttonExportSamplesCsv.Size = new Size(123, 28);
+        buttonExportSamplesCsv.TabIndex = 18;
+        buttonExportSamplesCsv.Text = "Export Samples CSV";
+        buttonExportSamplesCsv.UseVisualStyleBackColor = true;
+        buttonExportSamplesCsv.Click += buttonExportSamplesCsv_Click;
         // 
         // buttonAddSensor
         // 
@@ -601,6 +625,8 @@ partial class Form1
     private TextBox textBoxNotes;
     private Button buttonAddSensor;
     private Button buttonRunCharacterization;
+    private Button buttonExportRunsCsv;
+    private Button buttonExportSamplesCsv;
     private NumericUpDown numericUpDownWarmupMinutes;
     private Label labelWarmupMinutes;
     private NumericUpDown numericUpDownSampleCount;

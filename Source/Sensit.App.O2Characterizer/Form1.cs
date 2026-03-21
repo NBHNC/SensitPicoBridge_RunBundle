@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO.Ports;
+using System.Text;
 
 namespace Sensit.App.O2Characterizer;
 
@@ -58,6 +60,64 @@ public partial class Form1 : Form
     private void checkBoxUseLiveAdc_CheckedChanged(object sender, EventArgs e)
     {
         UpdateLiveControlsState();
+    }
+
+    private void buttonExportRunsCsv_Click(object sender, EventArgs e)
+    {
+        List<CharacterizationRunRecord> runs = GetVisibleRuns();
+        if (runs.Count == 0)
+        {
+            MessageBox.Show(this, "There are no characterization runs to export.", "No Runs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        SensorRecord? sensor = GetSelectedSensor();
+        using SaveFileDialog dialog = new()
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            DefaultExt = "csv",
+            FileName = BuildRunsExportFileName(sensor)
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        WriteRunsCsv(dialog.FileName, runs);
+        UpdateStatus($"Exported {runs.Count} run(s) to '{Path.GetFileName(dialog.FileName)}'.");
+    }
+
+    private void buttonExportSamplesCsv_Click(object sender, EventArgs e)
+    {
+        CharacterizationRunRecord? run = GetSelectedRun();
+        if (run is null)
+        {
+            MessageBox.Show(this, "Select a run before exporting raw samples.", "No Run Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        List<CharacterizationSampleRecord> samples = GetVisibleSamples();
+        if (samples.Count == 0)
+        {
+            MessageBox.Show(this, "The selected run does not have any raw samples to export.", "No Samples", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using SaveFileDialog dialog = new()
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            DefaultExt = "csv",
+            FileName = BuildSamplesExportFileName(run)
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        WriteSamplesCsv(dialog.FileName, run, samples);
+        UpdateStatus($"Exported {samples.Count} sample(s) to '{Path.GetFileName(dialog.FileName)}'.");
     }
 
     private void buttonAddSensor_Click(object sender, EventArgs e)
@@ -364,6 +424,118 @@ public partial class Form1 : Form
         textBoxPortName.Text = string.Empty;
         textBoxAdcAddress.Text = string.Empty;
         textBoxConfigReadback.Text = string.Empty;
+    }
+
+    private List<CharacterizationRunRecord> GetVisibleRuns()
+    {
+        if (_runBindingSource.DataSource is BindingList<CharacterizationRunRecord> bindingList)
+        {
+            return bindingList.ToList();
+        }
+
+        return new List<CharacterizationRunRecord>();
+    }
+
+    private List<CharacterizationSampleRecord> GetVisibleSamples()
+    {
+        if (_sampleBindingSource.DataSource is BindingList<CharacterizationSampleRecord> bindingList)
+        {
+            return bindingList.ToList();
+        }
+
+        return new List<CharacterizationSampleRecord>();
+    }
+
+    private static string BuildRunsExportFileName(SensorRecord? sensor)
+    {
+        string sensorId = string.IsNullOrWhiteSpace(sensor?.SensorId) ? "all_sensors" : SanitizeFileNamePart(sensor.SensorId);
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        return $"o2_runs_{sensorId}_{timestamp}.csv";
+    }
+
+    private static string BuildSamplesExportFileName(CharacterizationRunRecord run)
+    {
+        string sensorId = string.IsNullOrWhiteSpace(run.SensorId) ? "sensor" : SanitizeFileNamePart(run.SensorId);
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        return $"o2_samples_{sensorId}_run{run.Id}_{timestamp}.csv";
+    }
+
+    private static void WriteRunsCsv(string filePath, IEnumerable<CharacterizationRunRecord> runs)
+    {
+        StringBuilder csv = new();
+        csv.AppendLine("RunId,SensorDbId,SensorId,RunUtc,WarmupMinutes,SampleCount,SampleIntervalMs,AverageCount,MinCount,MaxCount,Spread,StdDev,RunMode,PortName,AdcAddress,ConfigReadbackHex,Notes");
+
+        foreach (CharacterizationRunRecord run in runs)
+        {
+            csv.AppendLine(string.Join(",",
+                EscapeCsv(run.Id.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.SensorDbId.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.SensorId),
+                EscapeCsv(run.RunUtc.ToString("o", CultureInfo.InvariantCulture)),
+                EscapeCsv(run.WarmupMinutes.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.SampleCount.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.SampleIntervalMs.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.AverageCount.ToString("F6", CultureInfo.InvariantCulture)),
+                EscapeCsv(run.MinCount.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.MaxCount.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.Spread.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.StdDev.ToString("F6", CultureInfo.InvariantCulture)),
+                EscapeCsv(run.RunMode),
+                EscapeCsv(run.PortName),
+                EscapeCsv(run.AdcAddress),
+                EscapeCsv(run.ConfigReadbackHex),
+                EscapeCsv(run.Notes)));
+        }
+
+        File.WriteAllText(filePath, csv.ToString(), new UTF8Encoding(true));
+    }
+
+    private static void WriteSamplesCsv(string filePath, CharacterizationRunRecord run, IEnumerable<CharacterizationSampleRecord> samples)
+    {
+        StringBuilder csv = new();
+        csv.AppendLine("SampleId,RunId,SensorId,RunUtc,SampleIndex,RawCount,TimestampUtc");
+
+        foreach (CharacterizationSampleRecord sample in samples)
+        {
+            csv.AppendLine(string.Join(",",
+                EscapeCsv(sample.Id.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(sample.RunId.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(run.SensorId),
+                EscapeCsv(run.RunUtc.ToString("o", CultureInfo.InvariantCulture)),
+                EscapeCsv(sample.SampleIndex.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(sample.RawCount.ToString(CultureInfo.InvariantCulture)),
+                EscapeCsv(sample.TimestampUtc.ToString("o", CultureInfo.InvariantCulture))));
+        }
+
+        File.WriteAllText(filePath, csv.ToString(), new UTF8Encoding(true));
+    }
+
+    private static string EscapeCsv(string? value)
+{
+    value ??= string.Empty;
+
+    bool mustQuote =
+        value.Contains(',') ||
+        value.Contains('"') ||
+        value.Contains('\n') ||
+        value.Contains('\r');
+
+    if (value.Contains('"'))
+    {
+        value = value.Replace("\"", "\"\"");
+    }
+
+    return mustQuote ? $"\"{value}\"" : value;
+}
+
+    private static string SanitizeFileNamePart(string value)
+    {
+        foreach (char invalid in Path.GetInvalidFileNameChars())
+        {
+            value = value.Replace(invalid, '_');
+        }
+
+        return string.IsNullOrWhiteSpace(value) ? "export" : value;
     }
 
     private void UpdateStatus(string message)
