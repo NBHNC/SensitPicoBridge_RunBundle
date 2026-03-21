@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS characterization_runs
     spread INTEGER NOT NULL,
     std_dev REAL NOT NULL,
     run_mode TEXT NOT NULL DEFAULT '',
+    run_tag TEXT NOT NULL DEFAULT '',
+    ambient_temp_c REAL NULL,
+    ambient_humidity_pct REAL NULL,
     port_name TEXT NOT NULL DEFAULT '',
     adc_address TEXT NOT NULL DEFAULT '',
     config_readback_hex TEXT NOT NULL DEFAULT '',
@@ -85,6 +88,9 @@ CREATE TABLE IF NOT EXISTS characterization_samples
         }
 
         EnsureColumnExists(connection, "characterization_runs", "run_mode", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumnExists(connection, "characterization_runs", "run_tag", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumnExists(connection, "characterization_runs", "ambient_temp_c", "REAL NULL");
+        EnsureColumnExists(connection, "characterization_runs", "ambient_humidity_pct", "REAL NULL");
         EnsureColumnExists(connection, "characterization_runs", "port_name", "TEXT NOT NULL DEFAULT ''");
         EnsureColumnExists(connection, "characterization_runs", "adc_address", "TEXT NOT NULL DEFAULT ''");
         EnsureColumnExists(connection, "characterization_runs", "config_readback_hex", "TEXT NOT NULL DEFAULT ''");
@@ -191,6 +197,9 @@ SELECT r.id,
        r.spread,
        r.std_dev,
        COALESCE(r.run_mode, ''),
+       COALESCE(r.run_tag, ''),
+       r.ambient_temp_c,
+       r.ambient_humidity_pct,
        COALESCE(r.port_name, ''),
        COALESCE(r.adc_address, ''),
        COALESCE(r.config_readback_hex, ''),
@@ -219,10 +228,13 @@ ORDER BY r.run_utc DESC;";
                 Spread = reader.GetInt32(10),
                 StdDev = reader.GetDouble(11),
                 RunMode = reader.GetString(12),
-                PortName = reader.GetString(13),
-                AdcAddress = reader.GetString(14),
-                ConfigReadbackHex = reader.GetString(15),
-                Notes = reader.GetString(16)
+                RunTag = reader.GetString(13),
+                AmbientTempC = reader.IsDBNull(14) ? null : reader.GetDouble(14),
+                AmbientHumidityPct = reader.IsDBNull(15) ? null : reader.GetDouble(15),
+                PortName = reader.GetString(16),
+                AdcAddress = reader.GetString(17),
+                ConfigReadbackHex = reader.GetString(18),
+                Notes = reader.GetString(19)
             });
         }
 
@@ -285,6 +297,9 @@ INSERT INTO characterization_runs (
     spread,
     std_dev,
     run_mode,
+    run_tag,
+    ambient_temp_c,
+    ambient_humidity_pct,
     port_name,
     adc_address,
     config_readback_hex,
@@ -301,6 +316,9 @@ VALUES (
     $spread,
     $std_dev,
     $run_mode,
+    $run_tag,
+    $ambient_temp_c,
+    $ambient_humidity_pct,
     $port_name,
     $adc_address,
     $config_readback_hex,
@@ -318,6 +336,9 @@ SELECT last_insert_rowid();";
             runCommand.Parameters.AddWithValue("$spread", result.Spread);
             runCommand.Parameters.AddWithValue("$std_dev", result.StdDev);
             runCommand.Parameters.AddWithValue("$run_mode", result.RunMode ?? string.Empty);
+            runCommand.Parameters.AddWithValue("$run_tag", result.RunTag ?? string.Empty);
+            runCommand.Parameters.AddWithValue("$ambient_temp_c", (object?)result.AmbientTempC ?? DBNull.Value);
+            runCommand.Parameters.AddWithValue("$ambient_humidity_pct", (object?)result.AmbientHumidityPct ?? DBNull.Value);
             runCommand.Parameters.AddWithValue("$port_name", result.PortName ?? string.Empty);
             runCommand.Parameters.AddWithValue("$adc_address", result.AdcAddress ?? string.Empty);
             runCommand.Parameters.AddWithValue("$config_readback_hex", result.ConfigReadbackHex ?? string.Empty);

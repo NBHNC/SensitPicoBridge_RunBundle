@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO.Ports;
 using System.Text;
@@ -12,10 +13,21 @@ public partial class Form1 : Form
     private readonly BindingSource _sensorBindingSource = new();
     private readonly BindingSource _runBindingSource = new();
     private readonly BindingSource _sampleBindingSource = new();
+    private readonly ToolTip _toolTip = new();
+
+    private Label? _labelRunTag;
+    private ComboBox? _comboBoxRunTag;
+    private Label? _labelAmbientTempC;
+    private TextBox? _textBoxAmbientTempC;
+    private Label? _labelAmbientHumidityPct;
+    private TextBox? _textBoxAmbientHumidityPct;
+    private Label? _labelTrendInfo;
+    private Panel? _panelTrend;
 
     public Form1()
     {
         InitializeComponent();
+        InitializeExtendedControls();
 
         _database = new DatabaseService();
         _characterizationService = new CharacterizationService();
@@ -40,9 +52,15 @@ public partial class Form1 : Form
             numericUpDownSampleCount.Value = 30;
             numericUpDownSampleIntervalMs.Value = 100;
 
+            if (_comboBoxRunTag is not null && _comboBoxRunTag.Items.Count > 0)
+            {
+                _comboBoxRunTag.Text = "Engineering Sample";
+            }
+
             RefreshPorts();
             RefreshSensors();
             UpdateLiveControlsState();
+            UpdateTrend();
             UpdateStatus("Ready.");
         }
         catch (Exception ex)
@@ -50,6 +68,108 @@ public partial class Form1 : Form
             MessageBox.Show(this, ex.Message, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             UpdateStatus("Startup failed.");
         }
+    }
+
+    private void InitializeExtendedControls()
+    {
+        _labelRunTag = new Label
+        {
+            AutoSize = true,
+            Location = new Point(19, 82),
+            Name = "labelRunTagDynamic",
+            Size = new Size(49, 15),
+            Text = "Run Tag"
+        };
+
+        _comboBoxRunTag = new ComboBox
+        {
+            Location = new Point(19, 100),
+            Name = "comboBoxRunTagDynamic",
+            Size = new Size(200, 23),
+            DropDownStyle = ComboBoxStyle.DropDown
+        };
+        _comboBoxRunTag.Items.AddRange(new object[]
+        {
+            "Known Good",
+            "Engineering Sample",
+            "Repeatability Test",
+            "Warmup Study",
+            "Suspect",
+            "Retest"
+        });
+
+        _labelAmbientTempC = new Label
+        {
+            AutoSize = true,
+            Location = new Point(235, 82),
+            Name = "labelAmbientTempCDynamic",
+            Size = new Size(88, 15),
+            Text = "Ambient Temp C"
+        };
+
+        _textBoxAmbientTempC = new TextBox
+        {
+            Location = new Point(235, 100),
+            Name = "textBoxAmbientTempCDynamic",
+            Size = new Size(110, 23)
+        };
+
+        _labelAmbientHumidityPct = new Label
+        {
+            AutoSize = true,
+            Location = new Point(361, 82),
+            Name = "labelAmbientHumidityPctDynamic",
+            Size = new Size(88, 15),
+            Text = "Ambient RH %"
+        };
+
+        _textBoxAmbientHumidityPct = new TextBox
+        {
+            Location = new Point(361, 100),
+            Name = "textBoxAmbientHumidityPctDynamic",
+            Size = new Size(110, 23)
+        };
+
+        _toolTip.SetToolTip(_comboBoxRunTag, "Tag this run so you can separate repeatability work, warmup studies, suspect units, and known-good samples later.");
+        _toolTip.SetToolTip(_textBoxAmbientTempC, "Optional for now. Enter ambient temperature in C manually until a fixture sensor is added.");
+        _toolTip.SetToolTip(_textBoxAmbientHumidityPct, "Optional for now. Enter ambient relative humidity in percent manually until a fixture sensor is added.");
+
+        groupBoxInput.Controls.Add(_labelRunTag);
+        groupBoxInput.Controls.Add(_comboBoxRunTag);
+        groupBoxInput.Controls.Add(_labelAmbientTempC);
+        groupBoxInput.Controls.Add(_textBoxAmbientTempC);
+        groupBoxInput.Controls.Add(_labelAmbientHumidityPct);
+        groupBoxInput.Controls.Add(_textBoxAmbientHumidityPct);
+
+        _labelTrendInfo = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 20,
+            Text = "Trend view will populate after you save one or more runs.",
+            Padding = new Padding(0, 0, 0, 2)
+        };
+
+        _panelTrend = new DoubleBufferedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0)
+        };
+        _panelTrend.Paint += panelTrend_Paint;
+
+        Panel trendContainer = new()
+        {
+            Name = "panelTrendContainer",
+            Dock = DockStyle.Top,
+            Height = 145,
+            Padding = new Padding(8, 18, 8, 8)
+        };
+
+        trendContainer.Controls.Add(_panelTrend);
+        trendContainer.Controls.Add(_labelTrendInfo);
+        groupBoxRuns.Controls.Add(trendContainer);
+        trendContainer.BringToFront();
     }
 
     private void buttonRefreshPorts_Click(object sender, EventArgs e)
@@ -160,6 +280,21 @@ public partial class Form1 : Form
             return;
         }
 
+        double? ambientTempC;
+        double? ambientHumidityPct;
+        try
+        {
+            ambientTempC = ParseOptionalDouble(_textBoxAmbientTempC?.Text, "Ambient Temp C");
+            ambientHumidityPct = ParseOptionalDouble(_textBoxAmbientHumidityPct?.Text, "Ambient RH %");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Invalid Metadata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        string runTag = _comboBoxRunTag?.Text.Trim() ?? string.Empty;
+
         buttonRunCharacterization.Enabled = false;
         buttonAddSensor.Enabled = false;
         buttonRefreshPorts.Enabled = false;
@@ -194,13 +329,18 @@ public partial class Form1 : Form
                     sampleIntervalMs);
             }
 
+            result.RunTag = runTag;
+            result.AmbientTempC = ambientTempC;
+            result.AmbientHumidityPct = ambientHumidityPct;
+
             long runId = _database.SaveRun(sensor.Id, result);
             RefreshRuns(sensor.Id);
             SelectRunById(runId);
             RefreshSamples(runId);
             DisplayResult(result);
 
-            UpdateStatus($"Saved characterization run for '{sensor.SensorId}'.");
+            string tagText = string.IsNullOrWhiteSpace(runTag) ? "untagged" : runTag;
+            UpdateStatus($"Saved characterization run for '{sensor.SensorId}' ({tagText}).");
         }
         catch (Exception ex)
         {
@@ -225,6 +365,10 @@ public partial class Form1 : Form
         {
             RefreshRuns(sensor.Id);
         }
+        else
+        {
+            UpdateTrend();
+        }
     }
 
     private void dataGridViewRuns_SelectionChanged(object sender, EventArgs e)
@@ -233,11 +377,127 @@ public partial class Form1 : Form
         if (run is null)
         {
             _sampleBindingSource.DataSource = new BindingList<CharacterizationSampleRecord>(new List<CharacterizationSampleRecord>());
+            UpdateTrend();
             return;
         }
 
         RefreshSamples(run.Id);
         DisplayRunSummary(run);
+        UpdateTrend();
+    }
+
+    private void panelTrend_Paint(object? sender, PaintEventArgs e)
+    {
+        if (_panelTrend is null)
+        {
+            return;
+        }
+
+        Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.White);
+
+        List<CharacterizationRunRecord> runs = GetVisibleRuns()
+            .OrderBy(r => r.RunUtc)
+            .ToList();
+
+        Rectangle area = _panelTrend.ClientRectangle;
+        area.Inflate(-12, -10);
+
+        if (area.Width <= 20 || area.Height <= 20)
+        {
+            return;
+        }
+
+        using Pen borderPen = new(Color.Gainsboro);
+        g.DrawRectangle(borderPen, area);
+
+        if (runs.Count == 0)
+        {
+            TextRenderer.DrawText(
+                g,
+                "No runs yet for the selected sensor.",
+                Font,
+                area,
+                Color.DimGray,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            return;
+        }
+
+        int leftPad = 52;
+        int rightPad = 12;
+        int topPad = 12;
+        int bottomPad = 28;
+        Rectangle plot = new(
+            area.Left + leftPad,
+            area.Top + topPad,
+            Math.Max(10, area.Width - leftPad - rightPad),
+            Math.Max(10, area.Height - topPad - bottomPad));
+
+        double minValue = runs.Min(r => r.AverageCount);
+        double maxValue = runs.Max(r => r.AverageCount);
+        if (Math.Abs(maxValue - minValue) < 0.0001)
+        {
+            minValue -= 1.0;
+            maxValue += 1.0;
+        }
+
+        using Pen axisPen = new(Color.Silver);
+        g.DrawLine(axisPen, plot.Left, plot.Bottom, plot.Right, plot.Bottom);
+        g.DrawLine(axisPen, plot.Left, plot.Top, plot.Left, plot.Bottom);
+
+        using Font axisFont = new(Font, FontStyle.Regular);
+        TextRenderer.DrawText(g, maxValue.ToString("F1", CultureInfo.InvariantCulture), axisFont,
+            new Rectangle(area.Left, plot.Top - 8, leftPad - 6, 20), Color.DimGray,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(g, minValue.ToString("F1", CultureInfo.InvariantCulture), axisFont,
+            new Rectangle(area.Left, plot.Bottom - 10, leftPad - 6, 20), Color.DimGray,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
+
+        List<PointF> points = new(runs.Count);
+        for (int i = 0; i < runs.Count; i++)
+        {
+            double xNorm = runs.Count == 1 ? 0.5 : i / (double)(runs.Count - 1);
+            double yNorm = (runs[i].AverageCount - minValue) / (maxValue - minValue);
+
+            float x = (float)(plot.Left + (xNorm * plot.Width));
+            float y = (float)(plot.Bottom - (yNorm * plot.Height));
+            points.Add(new PointF(x, y));
+        }
+
+        using Pen linePen = new(Color.SteelBlue, 2f);
+        if (points.Count > 1)
+        {
+            g.DrawLines(linePen, points.ToArray());
+        }
+
+        long selectedRunId = GetSelectedRun()?.Id ?? -1;
+        using Brush pointBrush = new SolidBrush(Color.SteelBlue);
+        using Brush selectedBrush = new SolidBrush(Color.OrangeRed);
+        using Brush textBrush = new SolidBrush(Color.DimGray);
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            CharacterizationRunRecord run = runs[i];
+            PointF point = points[i];
+            bool isSelected = run.Id == selectedRunId;
+            float radius = isSelected ? 5f : 4f;
+            RectangleF marker = new(point.X - radius, point.Y - radius, radius * 2f, radius * 2f);
+            g.FillEllipse(isSelected ? selectedBrush : pointBrush, marker);
+            g.DrawEllipse(Pens.White, marker);
+
+            string xLabel = run.RunUtc.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+            Size labelSize = TextRenderer.MeasureText(xLabel, axisFont);
+            g.DrawString(xLabel, axisFont, textBrush, point.X - (labelSize.Width / 2f), plot.Bottom + 4);
+        }
+
+        if (GetSelectedRun() is CharacterizationRunRecord selectedRun)
+        {
+            string selectedText = $"Selected: run {selectedRun.Id} | avg {selectedRun.AverageCount:F1} | tag {(string.IsNullOrWhiteSpace(selectedRun.RunTag) ? "-" : selectedRun.RunTag)}";
+            TextRenderer.DrawText(g, selectedText, axisFont,
+                new Rectangle(plot.Left + 4, area.Top, plot.Width - 8, 18), Color.Black,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
     }
 
     private void RefreshPorts()
@@ -302,6 +562,7 @@ public partial class Form1 : Form
             _runBindingSource.DataSource = new BindingList<CharacterizationRunRecord>(new List<CharacterizationRunRecord>());
             _sampleBindingSource.DataSource = new BindingList<CharacterizationSampleRecord>(new List<CharacterizationSampleRecord>());
             ClearSummary();
+            UpdateTrend();
         }
     }
 
@@ -323,6 +584,8 @@ public partial class Form1 : Form
             _sampleBindingSource.DataSource = new BindingList<CharacterizationSampleRecord>(new List<CharacterizationSampleRecord>());
             ClearSummary();
         }
+
+        UpdateTrend();
     }
 
     private void RefreshSamples(long runId)
@@ -355,6 +618,8 @@ public partial class Form1 : Form
                 break;
             }
         }
+
+        UpdateTrend();
     }
 
     private SensorRecord? GetSelectedSensor()
@@ -389,11 +654,11 @@ public partial class Form1 : Form
 
     private void DisplayResult(CharacterizationResult result)
     {
-        textBoxAverage.Text = result.AverageCount.ToString("F1");
-        textBoxMin.Text = result.MinCount.ToString();
-        textBoxMax.Text = result.MaxCount.ToString();
-        textBoxSpread.Text = result.Spread.ToString();
-        textBoxStdDev.Text = result.StdDev.ToString("F2");
+        textBoxAverage.Text = result.AverageCount.ToString("F1", CultureInfo.InvariantCulture);
+        textBoxMin.Text = result.MinCount.ToString(CultureInfo.InvariantCulture);
+        textBoxMax.Text = result.MaxCount.ToString(CultureInfo.InvariantCulture);
+        textBoxSpread.Text = result.Spread.ToString(CultureInfo.InvariantCulture);
+        textBoxStdDev.Text = result.StdDev.ToString("F2", CultureInfo.InvariantCulture);
         textBoxRunMode.Text = result.RunMode;
         textBoxPortName.Text = result.PortName;
         textBoxAdcAddress.Text = result.AdcAddress;
@@ -402,11 +667,11 @@ public partial class Form1 : Form
 
     private void DisplayRunSummary(CharacterizationRunRecord run)
     {
-        textBoxAverage.Text = run.AverageCount.ToString("F1");
-        textBoxMin.Text = run.MinCount.ToString();
-        textBoxMax.Text = run.MaxCount.ToString();
-        textBoxSpread.Text = run.Spread.ToString();
-        textBoxStdDev.Text = run.StdDev.ToString("F2");
+        textBoxAverage.Text = run.AverageCount.ToString("F1", CultureInfo.InvariantCulture);
+        textBoxMin.Text = run.MinCount.ToString(CultureInfo.InvariantCulture);
+        textBoxMax.Text = run.MaxCount.ToString(CultureInfo.InvariantCulture);
+        textBoxSpread.Text = run.Spread.ToString(CultureInfo.InvariantCulture);
+        textBoxStdDev.Text = run.StdDev.ToString("F2", CultureInfo.InvariantCulture);
         textBoxRunMode.Text = run.RunMode;
         textBoxPortName.Text = run.PortName;
         textBoxAdcAddress.Text = run.AdcAddress;
@@ -446,6 +711,41 @@ public partial class Form1 : Form
         return new List<CharacterizationSampleRecord>();
     }
 
+    private void UpdateTrend()
+    {
+        if (_panelTrend is null || _labelTrendInfo is null)
+        {
+            return;
+        }
+
+        SensorRecord? sensor = GetSelectedSensor();
+        List<CharacterizationRunRecord> runs = GetVisibleRuns()
+            .OrderBy(r => r.RunUtc)
+            .ToList();
+
+        if (sensor is null)
+        {
+            _labelTrendInfo.Text = "Select a sensor to view the average-count trend.";
+            _panelTrend.Invalidate();
+            return;
+        }
+
+        if (runs.Count == 0)
+        {
+            _labelTrendInfo.Text = $"Sensor {sensor.SensorId}: no saved runs yet.";
+            _panelTrend.Invalidate();
+            return;
+        }
+
+        double minAverage = runs.Min(r => r.AverageCount);
+        double maxAverage = runs.Max(r => r.AverageCount);
+        CharacterizationRunRecord? selectedRun = GetSelectedRun();
+        string selectedTag = string.IsNullOrWhiteSpace(selectedRun?.RunTag) ? "-" : selectedRun!.RunTag;
+
+        _labelTrendInfo.Text = $"Sensor {sensor.SensorId} | {runs.Count} run(s) | Avg range {minAverage:F1} to {maxAverage:F1} | Selected tag {selectedTag}";
+        _panelTrend.Invalidate();
+    }
+
     private static string BuildRunsExportFileName(SensorRecord? sensor)
     {
         string sensorId = string.IsNullOrWhiteSpace(sensor?.SensorId) ? "all_sensors" : SanitizeFileNamePart(sensor.SensorId);
@@ -463,7 +763,7 @@ public partial class Form1 : Form
     private static void WriteRunsCsv(string filePath, IEnumerable<CharacterizationRunRecord> runs)
     {
         StringBuilder csv = new();
-        csv.AppendLine("RunId,SensorDbId,SensorId,RunUtc,WarmupMinutes,SampleCount,SampleIntervalMs,AverageCount,MinCount,MaxCount,Spread,StdDev,RunMode,PortName,AdcAddress,ConfigReadbackHex,Notes");
+        csv.AppendLine("RunId,SensorDbId,SensorId,RunUtc,WarmupMinutes,SampleCount,SampleIntervalMs,AverageCount,MinCount,MaxCount,Spread,StdDev,RunMode,RunTag,AmbientTempC,AmbientHumidityPct,PortName,AdcAddress,ConfigReadbackHex,Notes");
 
         foreach (CharacterizationRunRecord run in runs)
         {
@@ -481,6 +781,9 @@ public partial class Form1 : Form
                 EscapeCsv(run.Spread.ToString(CultureInfo.InvariantCulture)),
                 EscapeCsv(run.StdDev.ToString("F6", CultureInfo.InvariantCulture)),
                 EscapeCsv(run.RunMode),
+                EscapeCsv(run.RunTag),
+                EscapeCsv(FormatNullableDouble(run.AmbientTempC)),
+                EscapeCsv(FormatNullableDouble(run.AmbientHumidityPct)),
                 EscapeCsv(run.PortName),
                 EscapeCsv(run.AdcAddress),
                 EscapeCsv(run.ConfigReadbackHex),
@@ -493,7 +796,7 @@ public partial class Form1 : Form
     private static void WriteSamplesCsv(string filePath, CharacterizationRunRecord run, IEnumerable<CharacterizationSampleRecord> samples)
     {
         StringBuilder csv = new();
-        csv.AppendLine("SampleId,RunId,SensorId,RunUtc,SampleIndex,RawCount,TimestampUtc");
+        csv.AppendLine("SampleId,RunId,SensorId,RunUtc,RunTag,AmbientTempC,AmbientHumidityPct,SampleIndex,RawCount,TimestampUtc");
 
         foreach (CharacterizationSampleRecord sample in samples)
         {
@@ -502,6 +805,9 @@ public partial class Form1 : Form
                 EscapeCsv(sample.RunId.ToString(CultureInfo.InvariantCulture)),
                 EscapeCsv(run.SensorId),
                 EscapeCsv(run.RunUtc.ToString("o", CultureInfo.InvariantCulture)),
+                EscapeCsv(run.RunTag),
+                EscapeCsv(FormatNullableDouble(run.AmbientTempC)),
+                EscapeCsv(FormatNullableDouble(run.AmbientHumidityPct)),
                 EscapeCsv(sample.SampleIndex.ToString(CultureInfo.InvariantCulture)),
                 EscapeCsv(sample.RawCount.ToString(CultureInfo.InvariantCulture)),
                 EscapeCsv(sample.TimestampUtc.ToString("o", CultureInfo.InvariantCulture))));
@@ -510,23 +816,44 @@ public partial class Form1 : Form
         File.WriteAllText(filePath, csv.ToString(), new UTF8Encoding(true));
     }
 
-    private static string EscapeCsv(string? value)
-{
-    value ??= string.Empty;
-
-    bool mustQuote =
-        value.Contains(',') ||
-        value.Contains('"') ||
-        value.Contains('\n') ||
-        value.Contains('\r');
-
-    if (value.Contains('"'))
+    private static double? ParseOptionalDouble(string? text, string fieldName)
     {
-        value = value.Replace("\"", "\"\"");
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (!double.TryParse(text.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double value) &&
+            !double.TryParse(text.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out value))
+        {
+            throw new InvalidOperationException($"{fieldName} must be blank or a valid number.");
+        }
+
+        return value;
     }
 
-    return mustQuote ? $"\"{value}\"" : value;
-}
+    private static string FormatNullableDouble(double? value)
+    {
+        return value.HasValue ? value.Value.ToString("F2", CultureInfo.InvariantCulture) : string.Empty;
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        value ??= string.Empty;
+
+        bool mustQuote =
+            value.Contains(',') ||
+            value.Contains('"') ||
+            value.Contains('\n') ||
+            value.Contains('\r');
+
+        if (value.Contains('"'))
+        {
+            value = value.Replace("\"", "\"\"");
+        }
+
+        return mustQuote ? $"\"{value}\"" : value;
+    }
 
     private static string SanitizeFileNamePart(string value)
     {
@@ -541,5 +868,14 @@ public partial class Form1 : Form
     private void UpdateStatus(string message)
     {
         toolStripStatusLabelMain.Text = message;
+    }
+
+    private sealed class DoubleBufferedPanel : Panel
+    {
+        public DoubleBufferedPanel()
+        {
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+        }
     }
 }

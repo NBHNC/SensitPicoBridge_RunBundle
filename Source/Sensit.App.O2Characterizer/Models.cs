@@ -23,6 +23,9 @@ public sealed class CharacterizationRunRecord
     public int Spread { get; set; }
     public double StdDev { get; set; }
     public string RunMode { get; set; } = string.Empty;
+    public string RunTag { get; set; } = string.Empty;
+    public double? AmbientTempC { get; set; }
+    public double? AmbientHumidityPct { get; set; }
     public string PortName { get; set; } = string.Empty;
     public string AdcAddress { get; set; } = string.Empty;
     public string ConfigReadbackHex { get; set; } = string.Empty;
@@ -50,6 +53,9 @@ public sealed class CharacterizationResult
     public int Spread { get; set; }
     public double StdDev { get; set; }
     public string RunMode { get; set; } = string.Empty;
+    public string RunTag { get; set; } = string.Empty;
+    public double? AmbientTempC { get; set; }
+    public double? AmbientHumidityPct { get; set; }
     public string PortName { get; set; } = string.Empty;
     public string AdcAddress { get; set; } = string.Empty;
     public string ConfigReadbackHex { get; set; } = string.Empty;
