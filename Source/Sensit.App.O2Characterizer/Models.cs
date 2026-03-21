@@ -22,11 +22,17 @@ public sealed class CharacterizationRunRecord
     public int MaxCount { get; set; }
     public int Spread { get; set; }
     public double StdDev { get; set; }
+    public string RunMode { get; set; } = string.Empty;
+    public string PortName { get; set; } = string.Empty;
+    public string AdcAddress { get; set; } = string.Empty;
+    public string ConfigReadbackHex { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
 }
 
 public sealed class CharacterizationSampleRecord
 {
+    public long Id { get; set; }
+    public long RunId { get; set; }
     public int SampleIndex { get; set; }
     public int RawCount { get; set; }
     public DateTime TimestampUtc { get; set; }
@@ -37,11 +43,15 @@ public sealed class CharacterizationResult
     public int WarmupMinutes { get; set; }
     public int SampleCount { get; set; }
     public int SampleIntervalMs { get; set; }
-    public List<int> Samples { get; set; } = new();
+    public List<CharacterizationSampleRecord> Samples { get; set; } = new();
     public double AverageCount { get; set; }
     public int MinCount { get; set; }
     public int MaxCount { get; set; }
     public int Spread { get; set; }
     public double StdDev { get; set; }
+    public string RunMode { get; set; } = string.Empty;
+    public string PortName { get; set; } = string.Empty;
+    public string AdcAddress { get; set; } = string.Empty;
+    public string ConfigReadbackHex { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
 }
