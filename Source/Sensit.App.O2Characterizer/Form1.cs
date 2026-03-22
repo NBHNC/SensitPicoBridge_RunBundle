@@ -23,6 +23,9 @@ public partial class Form1 : Form
     private TextBox? _textBoxAmbientHumidityPct;
     private Label? _labelTrendInfo;
     private Panel? _panelTrend;
+    private CheckBox? _checkBoxAutoReadSht45;
+
+    private readonly Sht45Service _sht45Service = new();
 
     public Form1()
     {
@@ -132,9 +135,21 @@ public partial class Form1 : Form
             Size = new Size(78, 23)
         };
 
+        _checkBoxAutoReadSht45 = new CheckBox
+        {
+            AutoSize = true,
+            Location = new Point(373, 118),
+            Name = "checkBoxAutoReadSht45Dynamic",
+            Size = new Size(114, 19),
+            Text = "Auto-read SHT45",
+            Checked = false
+        };
+        _checkBoxAutoReadSht45.CheckedChanged += (_, _) => UpdateLiveControlsState();
+
         _toolTip.SetToolTip(_comboBoxRunTag, "Tag this run so you can separate repeatability work, warmup studies, suspect units, and known-good samples later.");
         _toolTip.SetToolTip(_textBoxAmbientTempC, "Optional for now. Enter ambient temperature in C manually until a fixture sensor is added.");
         _toolTip.SetToolTip(_textBoxAmbientHumidityPct, "Optional for now. Enter ambient relative humidity in percent manually until a fixture sensor is added.");
+        _toolTip.SetToolTip(_checkBoxAutoReadSht45, "When enabled in Live ADC mode, read ambient temperature and humidity automatically from an SHT45 at I2C address 0x44 before the run starts.");
 
         groupBoxInput.Controls.Add(_labelRunTag);
         groupBoxInput.Controls.Add(_comboBoxRunTag);
@@ -142,6 +157,7 @@ public partial class Form1 : Form
         groupBoxInput.Controls.Add(_textBoxAmbientTempC);
         groupBoxInput.Controls.Add(_labelAmbientHumidityPct);
         groupBoxInput.Controls.Add(_textBoxAmbientHumidityPct);
+        groupBoxInput.Controls.Add(_checkBoxAutoReadSht45);
 
         _labelTrendInfo = new Label
         {
@@ -181,7 +197,7 @@ public partial class Form1 : Form
 
         try
         {
-            const int targetInputHeight = 170;
+            const int targetInputHeight = 195;
             int delta = targetInputHeight - groupBoxInput.Height;
 
             if (delta > 0)
@@ -229,6 +245,12 @@ public partial class Form1 : Form
             {
                 _textBoxAmbientHumidityPct.Location = new Point(279, 116);
                 _textBoxAmbientHumidityPct.Size = new Size(78, 23);
+            }
+
+            if (_checkBoxAutoReadSht45 is not null)
+            {
+                _checkBoxAutoReadSht45.Location = new Point(373, 118);
+                _checkBoxAutoReadSht45.AutoSize = true;
             }
 
             buttonExportRunsCsv.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -382,6 +404,8 @@ public partial class Form1 : Form
             return;
         }
 
+        bool shouldAutoReadSht45 = checkBoxUseLiveAdc.Checked && (_checkBoxAutoReadSht45?.Checked == true);
+
         double? ambientTempC;
         double? ambientHumidityPct;
         try
@@ -409,6 +433,43 @@ public partial class Form1 : Form
             int sampleCount = Decimal.ToInt32(numericUpDownSampleCount.Value);
             int sampleIntervalMs = Decimal.ToInt32(numericUpDownSampleIntervalMs.Value);
 
+            if (shouldAutoReadSht45)
+            {
+                string portName = comboBoxComPort.Text.Trim();
+                try
+                {
+                    UpdateStatus($"Reading SHT45 ambient data on {portName}...");
+                    Sht45Reading ambientReading = await _sht45Service.ReadAmbientAsync(portName);
+                    ambientTempC = ambientReading.TemperatureC;
+                    ambientHumidityPct = ambientReading.RelativeHumidityPct;
+
+                    if (_textBoxAmbientTempC is not null)
+                    {
+                        _textBoxAmbientTempC.Text = ambientReading.TemperatureC.ToString("F2", CultureInfo.InvariantCulture);
+                    }
+
+                    if (_textBoxAmbientHumidityPct is not null)
+                    {
+                        _textBoxAmbientHumidityPct.Text = ambientReading.RelativeHumidityPct.ToString("F2", CultureInfo.InvariantCulture);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DialogResult fallback = MessageBox.Show(
+                        this,
+                        $"SHT45 auto-read failed.\r\n\r\n{ex.Message}\r\n\r\nSelect Yes to continue with the manual temperature / humidity fields, or No to cancel the run.",
+                        "SHT45 Read Failed",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+
+                    if (fallback != DialogResult.Yes)
+                    {
+                        UpdateStatus("Characterization canceled after SHT45 read failure.");
+                        return;
+                    }
+                }
+            }
+
             CharacterizationResult result;
             if (checkBoxUseLiveAdc.Checked)
             {
@@ -434,6 +495,12 @@ public partial class Form1 : Form
             result.RunTag = runTag;
             result.AmbientTempC = ambientTempC;
             result.AmbientHumidityPct = ambientHumidityPct;
+            if (shouldAutoReadSht45 && result.RunMode == "Live ADC")
+            {
+                result.Notes = string.IsNullOrWhiteSpace(result.Notes)
+                    ? "Ambient temperature / humidity auto-read from SHT45 at 0x44 before the ADC run."
+                    : result.Notes + " Ambient temperature / humidity auto-read from SHT45 at 0x44 before the ADC run.";
+            }
 
             long runId = _database.SaveRun(sensor.Id, result);
             RefreshRuns(sensor.Id);
@@ -641,10 +708,37 @@ public partial class Form1 : Form
     private void UpdateLiveControlsState()
     {
         bool useLive = checkBoxUseLiveAdc.Checked;
+        bool autoReadSht45 = useLive && (_checkBoxAutoReadSht45?.Checked == true);
+
         comboBoxComPort.Enabled = useLive;
         buttonRefreshPorts.Enabled = useLive;
         labelComPort.Enabled = useLive;
         labelComPortHint.Enabled = useLive;
+
+        if (_checkBoxAutoReadSht45 is not null)
+        {
+            _checkBoxAutoReadSht45.Enabled = useLive;
+        }
+
+        if (_labelAmbientTempC is not null)
+        {
+            _labelAmbientTempC.Enabled = !autoReadSht45;
+        }
+
+        if (_textBoxAmbientTempC is not null)
+        {
+            _textBoxAmbientTempC.Enabled = !autoReadSht45;
+        }
+
+        if (_labelAmbientHumidityPct is not null)
+        {
+            _labelAmbientHumidityPct.Enabled = !autoReadSht45;
+        }
+
+        if (_textBoxAmbientHumidityPct is not null)
+        {
+            _textBoxAmbientHumidityPct.Enabled = !autoReadSht45;
+        }
     }
 
     private void RefreshSensors()

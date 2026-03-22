@@ -58,6 +58,38 @@ public sealed class PicoBridgeClient : IDisposable
         ExecuteOkOnly("PING");
     }
 
+    public void Write(byte address, params byte[] data)
+    {
+        if (data is null || data.Length == 0)
+        {
+            throw new ArgumentException("At least one write byte is required.", nameof(data));
+        }
+
+        string command = string.Format(
+            CultureInfo.InvariantCulture,
+            "WRITE {0:X2} {1}",
+            address,
+            string.Join(" ", data.Select(static b => b.ToString("X2", CultureInfo.InvariantCulture))));
+
+        ExecuteOkOnly(command);
+    }
+
+    public byte[] Read(byte address, int bytesToRead)
+    {
+        if (bytesToRead <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bytesToRead));
+        }
+
+        string command = string.Format(
+            CultureInfo.InvariantCulture,
+            "READ {0:X2} {1}",
+            address,
+            bytesToRead);
+
+        return ExecuteBytes(command, bytesToRead);
+    }
+
     public byte[] WriteThenRead(byte address, int bytesToRead, params byte[] writeData)
     {
         if (bytesToRead <= 0)
@@ -98,7 +130,7 @@ public sealed class PicoBridgeClient : IDisposable
             throw new IOException($"Unexpected response to '{command}': {response}");
         }
 
-        string payload = response.Length > 2 ? response.Substring(2).Trim() : string.Empty;
+        string payload = response.Length > 2 ? response[2..].Trim() : string.Empty;
         if (string.IsNullOrWhiteSpace(payload))
         {
             if (expectedLength == 0)
@@ -152,11 +184,6 @@ public sealed class PicoBridgeClient : IDisposable
                 if (response.StartsWith("Pico I2C Bridge ready", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
-                }
-
-                if (response.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new IOException(response);
                 }
 
                 return response;
