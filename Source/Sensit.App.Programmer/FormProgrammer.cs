@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO.Ports;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Windows.Forms;
 using Sensit.TestSDK.Devices;
 using Sensit.TestSDK.Exceptions;
@@ -18,6 +19,18 @@ namespace Sensit.App.Programmer
     {
         private readonly ushort I2C_ADDRESS_EEPROM = 0x57; // CAT24C256 EEPROM I2C address
         private readonly ushort I2C_ADDRESS_SENSOR = 0x48; // Sensor ADC I2C address
+
+        private const byte ADS_POINTER_CONVERSION = 0x00;
+        private const byte ADS_POINTER_CONFIG = 0x01;
+
+        // ADS111x config:
+        // AIN0 single-ended, ±2.048 V, continuous mode, 128 SPS, comparator disabled
+        private const byte ADS_CFG_MSB = 0x44;
+        private const byte ADS_CFG_LSB = 0x83;
+
+        private const int ADS_SETTLE_MS = 25;
+        private const int ADS_SAMPLE_COUNT = 3;
+        private const int ADS_RAIL_THRESHOLD = 32760;
 
         public FormProgrammer()
         {
@@ -131,9 +144,8 @@ namespace Sensit.App.Programmer
                 UpdateProgress("Reading manufacturing record...", 75);
                 ReadManufacturingRecord();
 
-                UpdateProgress("Checking sensor...", 85);
-                // TODO: Test and enable checking of sensors.
-                //CheckSensor(sensorType);
+                UpdateProgress("Checking ADC...", 85);
+                CheckSensor(sensorType);
 
                 UpdateProgress("Closing Pico connection...", 95);
                 ClosePico();
@@ -185,9 +197,8 @@ namespace Sensit.App.Programmer
                 UpdateProgress("Writing manufacturing record...", 75);
                 WriteManufacturingRecord(sensorType, serialNumber);
 
-                UpdateProgress("Checking sensor...", 85);
-                // TODO: Test and enable checking of sensors.
-                //CheckSensor(sensorType);
+                UpdateProgress("Checking ADC...", 85);
+                CheckSensor(sensorType);
 
                 UpdateProgress("Closing Pico connection...", 95);
                 ClosePico();
@@ -360,35 +371,68 @@ namespace Sensit.App.Programmer
 
         private void CheckSensor(SensorType sensorType)
         {
-            List<byte> writeData = [0x00, 0x00, 0x00];
+            // Keep the first-pass functional check simple:
+            // verify the ADC accepts config writes and returns live conversion data.
+            _ = sensorType;
 
-            switch (sensorType)
+            List<byte> configReadback = picoI2C.I2CWriteThenRead(
+                I2C_ADDRESS_SENSOR,
+                [ADS_POINTER_CONFIG, ADS_CFG_MSB, ADS_CFG_LSB],
+                2);
+
+            if (configReadback.Count != 2)
             {
-                case SensorType.Oxygen:
-                    writeData[0] = ADS111x.AddressRegister(ADS111x.AddressPointer.ConfigRegister);
-                    writeData[1] = ADS111x.ConfigRegister(
-                        ADS111x.ConfigFlags.MUX_AIN0 | ADS111x.ConfigFlags.PGA_FSR_2_048V |
-                        ADS111x.ConfigFlags.MODE_Continuous | ADS111x.ConfigFlags.DR_SPS_3300 |
-                        ADS111x.ConfigFlags.COMP_MODE_Traditional | ADS111x.ConfigFlags.COMP_POL_Low);
-                    break;
-                case SensorType.HydrogenCyanide:
-                case SensorType.SulfurDioxide:
-                case SensorType.HydrogenSulfide:
-                case SensorType.CarbonMonoxide:
-                    // TODO
-                    break;
-                default:
-                    throw new DeviceSettingNotSupportedException("Invalid sensor type.");
+                throw new DeviceCommunicationException("ADC config readback returned the wrong number of bytes.");
             }
 
-            List<byte> readData = picoI2C.I2CWriteThenRead(I2C_ADDRESS_SENSOR, writeData, 2);
-            int adcValue = (readData[0] << 8) | readData[1];
-            textBoxSensorCounts.Text = adcValue.ToString(CultureInfo.InvariantCulture);
-
-            if (adcValue < 0 || adcValue > 65535)
+            if (configReadback[0] != ADS_CFG_MSB || configReadback[1] != ADS_CFG_LSB)
             {
-                picoI2C.Close();
-                throw new DeviceCommunicationException("Sensor ADC value out of range.");
+                throw new DeviceCommunicationException("ADC config readback mismatch.");
+            }
+
+            int sum = 0;
+            bool allZero = true;
+            bool allAtRail = true;
+
+            for (int i = 0; i < ADS_SAMPLE_COUNT; i++)
+            {
+                Thread.Sleep(ADS_SETTLE_MS);
+
+                List<byte> conversion = picoI2C.I2CWriteThenRead(
+                    I2C_ADDRESS_SENSOR,
+                    [ADS_POINTER_CONVERSION],
+                    2);
+
+                if (conversion.Count != 2)
+                {
+                    throw new DeviceCommunicationException("ADC conversion read returned the wrong number of bytes.");
+                }
+
+                short sample = (short)((conversion[0] << 8) | conversion[1]);
+                sum += sample;
+
+                if (sample != 0)
+                {
+                    allZero = false;
+                }
+
+                if (Math.Abs((int)sample) < ADS_RAIL_THRESHOLD)
+                {
+                    allAtRail = false;
+                }
+            }
+
+            int average = (int)Math.Round(sum / (double)ADS_SAMPLE_COUNT);
+            textBoxSensorCounts.Text = average.ToString(CultureInfo.InvariantCulture);
+
+            if (allZero)
+            {
+                throw new DeviceCommunicationException("ADC returned all-zero conversion data.");
+            }
+
+            if (allAtRail)
+            {
+                throw new DeviceCommunicationException("ADC conversion is stuck at the rail.");
             }
         }
 
@@ -432,6 +476,7 @@ namespace Sensit.App.Programmer
             textBoxSerialNumber.Text   = string.Empty;
             textBoxSensorType.Text     = string.Empty;
             textBoxDateProgrammed.Text = string.Empty;
+            textBoxSensorCounts.Text   = string.Empty;
         }
 
         #endregion
