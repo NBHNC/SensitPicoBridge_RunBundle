@@ -135,3 +135,10 @@ From repo root:
 
 ```powershell
 dotnet build .\Source\Sensit.App.O2Characterizer\
+
+## Scripts
+
+Build the O2 Characterizer release build:
+
+```powershell
+.\Source\Sensit.App.O2Characterizer\Scripts\build_o2_characterizer.ps1
