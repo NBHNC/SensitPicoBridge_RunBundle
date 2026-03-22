@@ -28,6 +28,8 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         InitializeExtendedControls();
+        ApplyLayoutFixes();
+        Resize += (_, _) => ApplyLayoutFixes();
 
         _database = new DatabaseService();
         _characterizationService = new CharacterizationService();
@@ -75,7 +77,7 @@ public partial class Form1 : Form
         _labelRunTag = new Label
         {
             AutoSize = true,
-            Location = new Point(19, 82),
+            Location = new Point(19, 96),
             Name = "labelRunTagDynamic",
             Size = new Size(49, 15),
             Text = "Run Tag"
@@ -83,9 +85,9 @@ public partial class Form1 : Form
 
         _comboBoxRunTag = new ComboBox
         {
-            Location = new Point(19, 100),
+            Location = new Point(19, 116),
             Name = "comboBoxRunTagDynamic",
-            Size = new Size(200, 23),
+            Size = new Size(150, 23),
             DropDownStyle = ComboBoxStyle.DropDown
         };
         _comboBoxRunTag.Items.AddRange(new object[]
@@ -101,33 +103,33 @@ public partial class Form1 : Form
         _labelAmbientTempC = new Label
         {
             AutoSize = true,
-            Location = new Point(235, 82),
+            Location = new Point(185, 96),
             Name = "labelAmbientTempCDynamic",
-            Size = new Size(88, 15),
-            Text = "Ambient Temp C"
+            Size = new Size(54, 15),
+            Text = "Temp °C"
         };
 
         _textBoxAmbientTempC = new TextBox
         {
-            Location = new Point(235, 100),
+            Location = new Point(185, 116),
             Name = "textBoxAmbientTempCDynamic",
-            Size = new Size(110, 23)
+            Size = new Size(78, 23)
         };
 
         _labelAmbientHumidityPct = new Label
         {
             AutoSize = true,
-            Location = new Point(361, 82),
+            Location = new Point(279, 96),
             Name = "labelAmbientHumidityPctDynamic",
-            Size = new Size(88, 15),
-            Text = "Ambient RH %"
+            Size = new Size(35, 15),
+            Text = "RH %"
         };
 
         _textBoxAmbientHumidityPct = new TextBox
         {
-            Location = new Point(361, 100),
+            Location = new Point(279, 116),
             Name = "textBoxAmbientHumidityPctDynamic",
-            Size = new Size(110, 23)
+            Size = new Size(78, 23)
         };
 
         _toolTip.SetToolTip(_comboBoxRunTag, "Tag this run so you can separate repeatability work, warmup studies, suspect units, and known-good samples later.");
@@ -170,6 +172,106 @@ public partial class Form1 : Form
         trendContainer.Controls.Add(_labelTrendInfo);
         groupBoxRuns.Controls.Add(trendContainer);
         trendContainer.BringToFront();
+    }
+
+
+    private void ApplyLayoutFixes()
+    {
+        SuspendLayout();
+
+        try
+        {
+            const int targetInputHeight = 170;
+            int delta = targetInputHeight - groupBoxInput.Height;
+
+            if (delta > 0)
+            {
+                groupBoxInput.Height = targetInputHeight;
+
+                groupBoxSummary.Top += delta;
+
+                groupBoxSensors.Top += delta;
+                groupBoxRuns.Top += delta;
+                groupBoxSamples.Top += delta;
+
+                groupBoxSensors.Height = Math.Max(180, groupBoxSensors.Height - delta);
+                groupBoxSamples.Height = Math.Max(180, groupBoxSamples.Height - delta);
+            }
+
+            if (_labelRunTag is not null)
+                _labelRunTag.Location = new Point(19, 96);
+
+            if (_comboBoxRunTag is not null)
+            {
+                _comboBoxRunTag.Location = new Point(19, 116);
+                _comboBoxRunTag.Size = new Size(150, 23);
+            }
+
+            if (_labelAmbientTempC is not null)
+            {
+                _labelAmbientTempC.Text = "Temp °C";
+                _labelAmbientTempC.Location = new Point(185, 96);
+            }
+
+            if (_textBoxAmbientTempC is not null)
+            {
+                _textBoxAmbientTempC.Location = new Point(185, 116);
+                _textBoxAmbientTempC.Size = new Size(78, 23);
+            }
+
+            if (_labelAmbientHumidityPct is not null)
+            {
+                _labelAmbientHumidityPct.Text = "RH %";
+                _labelAmbientHumidityPct.Location = new Point(279, 96);
+            }
+
+            if (_textBoxAmbientHumidityPct is not null)
+            {
+                _textBoxAmbientHumidityPct.Location = new Point(279, 116);
+                _textBoxAmbientHumidityPct.Size = new Size(78, 23);
+            }
+
+            buttonExportRunsCsv.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonExportSamplesCsv.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonRunCharacterization.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonRefreshPorts.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            comboBoxComPort.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+
+            int rightMargin = 16;
+
+            buttonExportSamplesCsv.Location = new Point(
+                groupBoxInput.ClientSize.Width - buttonExportSamplesCsv.Width - rightMargin,
+                116);
+
+            buttonExportRunsCsv.Location = new Point(
+                buttonExportSamplesCsv.Left - 10 - buttonExportRunsCsv.Width,
+                116);
+
+            buttonRunCharacterization.Location = new Point(
+                buttonExportRunsCsv.Left - 16 - buttonRunCharacterization.Width,
+                48);
+
+            buttonRefreshPorts.Location = new Point(
+                buttonRunCharacterization.Left - 12 - buttonRefreshPorts.Width,
+                49);
+
+            comboBoxComPort.Location = new Point(
+                buttonRefreshPorts.Left - 12 - comboBoxComPort.Width,
+                51);
+
+            labelComPort.Location = new Point(comboBoxComPort.Left, 33);
+            checkBoxUseLiveAdc.Location = new Point(comboBoxComPort.Left, 84);
+            labelComPortHint.Location = new Point(comboBoxComPort.Left, 106);
+
+            int textRightLimit = buttonExportRunsCsv.Left - 18;
+
+            checkBoxUseLiveAdc.Width = Math.Max(180, textRightLimit - checkBoxUseLiveAdc.Left);
+            labelComPortHint.Width = Math.Max(180, textRightLimit - labelComPortHint.Left);
+        }
+        finally
+        {
+            ResumeLayout();
+        }
     }
 
     private void buttonRefreshPorts_Click(object sender, EventArgs e)
