@@ -19,6 +19,30 @@ namespace Sensit.App.Programmer
         private readonly ushort I2C_ADDRESS_EEPROM = 0x57; // CAT24C256 EEPROM I2C address
         private readonly ushort I2C_ADDRESS_SENSOR = 0x48; // Sensor ADC I2C address
 
+        // ADS1115 register map / configuration used for the post-programming ADC bridge screen.
+        private const byte ADS111X_REGISTER_CONVERSION = 0x00;
+        private const byte ADS111X_REGISTER_CONFIG = 0x01;
+        private const ushort ADS111X_CONFIG_OS_SINGLE = 0x8000;
+        private const ushort ADS111X_CONFIG_MUX_AIN0_GND = 0x4000;
+        private const ushort ADS111X_CONFIG_MUX_AIN1_GND = 0x5000;
+        private const ushort ADS111X_CONFIG_MUX_AIN2_GND = 0x6000;
+        private const ushort ADS111X_CONFIG_MUX_AIN3_GND = 0x7000;
+        private const ushort ADS111X_CONFIG_PGA_4_096V = 0x0200;
+        private const ushort ADS111X_CONFIG_MODE_SINGLE_SHOT = 0x0100;
+        private const ushort ADS111X_CONFIG_DR_128SPS = 0x0080;
+        private const ushort ADS111X_CONFIG_COMP_DISABLE = 0x0003;
+
+        // Keep these windows intentionally loose so this is only a gross bridge / solder screen.
+        private const double ADS111X_FULL_SCALE_VOLTS = 4.096;
+        private const double ADC_LOW_RAIL_FAIL_VOLTS = 0.10;
+        private const double ADC_HIGH_RAIL_FAIL_VOLTS = 3.15;
+        private const double ADC_BIAS_TARGET_VOLTS = 1.20;
+        private const double ADC_BIAS_MIN_VOLTS = 0.90;
+        private const double ADC_BIAS_MAX_VOLTS = 1.50;
+        private const int ADS111X_CONVERSION_DELAY_MS = 10;
+        private const int ADS111X_BRIDGE_CHECK_SAMPLES = 3;
+
+
         public FormProgrammer()
         {
             InitializeComponent();
@@ -131,9 +155,8 @@ namespace Sensit.App.Programmer
                 UpdateProgress("Reading manufacturing record...", 75);
                 ReadManufacturingRecord();
 
-                UpdateProgress("Checking sensor...", 85);
-                // TODO: Test and enable checking of sensors.
-                //CheckSensor(sensorType);
+                UpdateProgress("Running ADC bridge screen...", 85);
+                RunAdcBridgeScreen(sensorType);
 
                 UpdateProgress("Closing Pico connection...", 95);
                 ClosePico();
@@ -185,9 +208,8 @@ namespace Sensit.App.Programmer
                 UpdateProgress("Writing manufacturing record...", 75);
                 WriteManufacturingRecord(sensorType, serialNumber);
 
-                UpdateProgress("Checking sensor...", 85);
-                // TODO: Test and enable checking of sensors.
-                //CheckSensor(sensorType);
+                UpdateProgress("Running ADC bridge screen...", 85);
+                RunAdcBridgeScreen(sensorType);
 
                 UpdateProgress("Closing Pico connection...", 95);
                 ClosePico();
@@ -358,37 +380,152 @@ namespace Sensit.App.Programmer
             picoI2C.EepromWrite(I2C_ADDRESS_EEPROM, ADDRESS_MANUFACTURING_ID, manufactureID.GetBytes());
         }
 
-        private void CheckSensor(SensorType sensorType)
+        private void RunAdcBridgeScreen(SensorType sensorType)
         {
-            List<byte> writeData = [0x00, 0x00, 0x00];
-
             switch (sensorType)
             {
                 case SensorType.Oxygen:
-                    writeData[0] = ADS111x.AddressRegister(ADS111x.AddressPointer.ConfigRegister);
-                    writeData[1] = ADS111x.ConfigRegister(
-                        ADS111x.ConfigFlags.MUX_AIN0 | ADS111x.ConfigFlags.PGA_FSR_2_048V |
-                        ADS111x.ConfigFlags.MODE_Continuous | ADS111x.ConfigFlags.DR_SPS_3300 |
-                        ADS111x.ConfigFlags.COMP_MODE_Traditional | ADS111x.ConfigFlags.COMP_POL_Low);
+                    RunOxygenAdcBridgeScreen();
                     break;
+
                 case SensorType.HydrogenCyanide:
-                case SensorType.SulfurDioxide:
                 case SensorType.HydrogenSulfide:
                 case SensorType.CarbonMonoxide:
-                    // TODO
+                    RunBiasedSensorAdcBridgeScreen();
                     break;
+
                 default:
-                    throw new DeviceSettingNotSupportedException("Invalid sensor type.");
+                    throw new DeviceSettingNotSupportedException("ADC bridge screen is not supported for this sensor type.");
+            }
+        }
+
+        private void RunOxygenAdcBridgeScreen()
+        {
+            int ain0Counts = ReadAds111xSingleEndedAverage(0);
+            int ain1Counts = ReadAds111xSingleEndedAverage(1);
+
+            double ain0Volts = ConvertAds111xCountsToVolts(ain0Counts);
+            double ain1Volts = ConvertAds111xCountsToVolts(ain1Counts);
+
+            textBoxSensorCounts.Text =
+                $"AIN0={ain0Counts} ({ain0Volts:F3} V){Environment.NewLine}" +
+                $"AIN1={ain1Counts} ({ain1Volts:F3} V)";
+
+            // O2 board:
+            // - AIN1 is the known 1.2 V bias node and should drive pass/fail.
+            // - AIN0 is the live sensor output (Vout), so for now we only display/log it.
+            ValidateAdcBiasNode("AIN1", ain1Volts);
+        }
+
+        private void RunBiasedSensorAdcBridgeScreen()
+        {
+            int ain0Counts = ReadAds111xSingleEndedAverage(0);
+            int ain1Counts = ReadAds111xSingleEndedAverage(1);
+            int ain2Counts = ReadAds111xSingleEndedAverage(2);
+            int ain3Counts = ReadAds111xSingleEndedAverage(3);
+
+            double ain0Volts = ConvertAds111xCountsToVolts(ain0Counts);
+            double ain1Volts = ConvertAds111xCountsToVolts(ain1Counts);
+            double ain2Volts = ConvertAds111xCountsToVolts(ain2Counts);
+            double ain3Volts = ConvertAds111xCountsToVolts(ain3Counts);
+
+            textBoxSensorCounts.Text =
+                $"AIN0={ain0Counts} ({ain0Volts:F3} V), AIN1={ain1Counts} ({ain1Volts:F3} V){Environment.NewLine}" +
+                $"AIN2={ain2Counts} ({ain2Volts:F3} V), AIN3={ain3Counts} ({ain3Volts:F3} V)";
+
+            ValidateAdcInputNotOnRail("AIN0", ain0Volts);
+            ValidateAdcBiasNode("AIN1", ain1Volts);
+            ValidateAdcInputNotOnRail("AIN2", ain2Volts);
+            ValidateAdcBiasNode("AIN3", ain3Volts);
+        }
+
+        private int ReadAds111xSingleEndedAverage(int channel)
+        {
+            int total = 0;
+
+            for (int i = 0; i < ADS111X_BRIDGE_CHECK_SAMPLES; i++)
+            {
+                total += ReadAds111xSingleEndedSample(channel);
             }
 
-            List<byte> readData = picoI2C.I2CWriteThenRead(I2C_ADDRESS_SENSOR, writeData, 2);
-            int adcValue = (readData[0] << 8) | readData[1];
-            textBoxSensorCounts.Text = adcValue.ToString(CultureInfo.InvariantCulture);
+            return total / ADS111X_BRIDGE_CHECK_SAMPLES;
+        }
 
-            if (adcValue < 0 || adcValue > 65535)
+        private short ReadAds111xSingleEndedSample(int channel)
+        {
+            ushort mux = channel switch
             {
-                picoI2C.Close();
-                throw new DeviceCommunicationException("Sensor ADC value out of range.");
+                0 => ADS111X_CONFIG_MUX_AIN0_GND,
+                1 => ADS111X_CONFIG_MUX_AIN1_GND,
+                2 => ADS111X_CONFIG_MUX_AIN2_GND,
+                3 => ADS111X_CONFIG_MUX_AIN3_GND,
+                _ => throw new DeviceSettingNotSupportedException("Unsupported ADC channel for bridge screen.")
+            };
+
+            ushort config = (ushort)(ADS111X_CONFIG_OS_SINGLE |
+                                     mux |
+                                     ADS111X_CONFIG_PGA_4_096V |
+                                     ADS111X_CONFIG_MODE_SINGLE_SHOT |
+                                     ADS111X_CONFIG_DR_128SPS |
+                                     ADS111X_CONFIG_COMP_DISABLE);
+
+            List<byte> configWriteData =
+            [
+                ADS111X_REGISTER_CONFIG,
+                (byte)(config >> 8),
+                (byte)(config & 0xFF)
+            ];
+
+            // Write config and confirm the ADC acknowledges the transaction.
+            picoI2C.I2CWriteThenRead(I2C_ADDRESS_SENSOR, configWriteData, 2);
+
+            System.Threading.Thread.Sleep(ADS111X_CONVERSION_DELAY_MS);
+
+            List<byte> readData = picoI2C.I2CWriteThenRead(
+                I2C_ADDRESS_SENSOR,
+                [ADS111X_REGISTER_CONVERSION],
+                2);
+
+            if (readData.Count != 2)
+            {
+                throw new DeviceCommunicationException("ADC bridge screen failed: invalid conversion response length.");
+            }
+
+            ushort rawCounts = (ushort)((readData[0] << 8) | readData[1]);
+            return unchecked((short)rawCounts);
+        }
+
+        private static double ConvertAds111xCountsToVolts(int counts)
+        {
+            if (counts < 0)
+            {
+                throw new TestException($"ADC bridge screen failed: negative single-ended reading ({counts} counts).");
+            }
+
+            return counts * ADS111X_FULL_SCALE_VOLTS / 32768.0;
+        }
+
+        private static void ValidateAdcInputNotOnRail(string channelName, double volts)
+        {
+            if (volts <= ADC_LOW_RAIL_FAIL_VOLTS)
+            {
+                throw new TestException(
+                    $"ADC bridge screen failed: {channelName} appears shorted near GND ({volts:F3} V).");
+            }
+
+            if (volts >= ADC_HIGH_RAIL_FAIL_VOLTS)
+            {
+                throw new TestException(
+                    $"ADC bridge screen failed: {channelName} appears shorted near VDD ({volts:F3} V).");
+            }
+        }
+
+        private static void ValidateAdcBiasNode(string channelName, double volts)
+        {
+            if (volts < ADC_BIAS_MIN_VOLTS || volts > ADC_BIAS_MAX_VOLTS)
+            {
+                throw new TestException(
+                    $"ADC bridge screen failed: {channelName} bias node is out of range ({volts:F3} V, expected about {ADC_BIAS_TARGET_VOLTS:F1} V).");
             }
         }
 
@@ -432,6 +569,7 @@ namespace Sensit.App.Programmer
             textBoxSerialNumber.Text   = string.Empty;
             textBoxSensorType.Text     = string.Empty;
             textBoxDateProgrammed.Text = string.Empty;
+            textBoxSensorCounts.Text   = string.Empty;
         }
 
         #endregion
